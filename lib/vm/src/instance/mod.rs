@@ -117,7 +117,7 @@ impl Instance {
     }
 
     pub(crate) fn module_ref(&self) -> &ModuleInfo {
-        &*self.module
+        &self.module
     }
 
     fn context(&self) -> &StoreObjects {
@@ -869,7 +869,7 @@ impl InstanceHandle {
                 let instance = instance_handle.instance_mut();
                 let vmctx_ptr = instance.vmctx_ptr();
                 (instance.funcrefs, instance.imported_funcrefs) = build_funcrefs(
-                    &*instance.module,
+                    &instance.module,
                     context,
                     &imports,
                     &instance.functions,
