@@ -571,7 +571,7 @@ impl MachineX86_64 {
 
         self.release_gpr(tmp2);
 
-        let align = memarg.align;
+        let align = value_size as u32;
         if check_alignment && align != 1 {
             let tmp_aligncheck = self.acquire_temp_gpr().ok_or(CodegenError {
                 message: "singlepass cannot acquire temp gpr".to_string(),
