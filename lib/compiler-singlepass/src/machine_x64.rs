@@ -5569,7 +5569,7 @@ impl Machine for MachineX86_64 {
             unaligned_atomic,
             |this, addr| {
                 this.assembler.emit_lock_xadd(
-                    Size::S32,
+                    Size::S64,
                     Location::GPR(value),
                     Location::Memory(addr, 0),
                 )
@@ -6579,7 +6579,7 @@ impl Machine for MachineX86_64 {
             unaligned_atomic,
             |this, addr| {
                 this.assembler.emit_lock_cmpxchg(
-                    Size::S16,
+                    Size::S32,
                     Location::GPR(value),
                     Location::Memory(addr, 0),
                 )?;
