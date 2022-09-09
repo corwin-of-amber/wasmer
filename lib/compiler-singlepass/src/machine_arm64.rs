@@ -3290,42 +3290,75 @@ impl Machine for MachineARM64 {
     }
     fn i32_atomic_load(
         &mut self,
-        _addr: Location,
-        _memarg: &MemoryImmediate,
-        _ret: Location,
-        _need_check: bool,
-        _imported_memories: bool,
-        _offset: i32,
-        _heap_access_oob: Label,
-        _unaligned_atomic: Label,
+        addr: Location,
+        memarg: &MemoryImmediate,
+        ret: Location,
+        need_check: bool,
+        imported_memories: bool,
+        offset: i32,
+        heap_access_oob: Label,
+        unaligned_atomic: Label,
     ) -> Result<(), CodegenError> {
-        codegen_error!("singlepass i32_atomic_load unimplemented");
+        self.memory_op(
+            addr,
+            memarg,
+            true,
+            4,
+            need_check,
+            imported_memories,
+            offset,
+            heap_access_oob,
+            unaligned_atomic,
+            |this, addr| this.emit_relaxed_ldr32(Size::S32, ret, Location::Memory(addr, 0)),
+        )
     }
     fn i32_atomic_load_8u(
         &mut self,
-        _addr: Location,
-        _memarg: &MemoryImmediate,
-        _ret: Location,
-        _need_check: bool,
-        _imported_memories: bool,
-        _offset: i32,
-        _heap_access_oob: Label,
-        _unaligned_atomic: Label,
+        addr: Location,
+        memarg: &MemoryImmediate,
+        ret: Location,
+        need_check: bool,
+        imported_memories: bool,
+        offset: i32,
+        heap_access_oob: Label,
+        unaligned_atomic: Label,
     ) -> Result<(), CodegenError> {
-        codegen_error!("singlepass i32_atomic_load_8u unimplemented");
+        self.memory_op(
+            addr,
+            memarg,
+            true,
+            1,
+            need_check,
+            imported_memories,
+            offset,
+            heap_access_oob,
+            unaligned_atomic,
+            |this, addr| this.emit_relaxed_ldr8(Size::S32, ret, Location::Memory(addr, 0)),
+        )
     }
     fn i32_atomic_load_16u(
         &mut self,
-        _addr: Location,
-        _memarg: &MemoryImmediate,
-        _ret: Location,
-        _need_check: bool,
-        _imported_memories: bool,
-        _offset: i32,
-        _heap_access_oob: Label,
-        _unaligned_atomic: Label,
+        addr: Location,
+        memarg: &MemoryImmediate,
+        ret: Location,
+        need_check: bool,
+        imported_memories: bool,
+        offset: i32,
+        heap_access_oob: Label,
+        unaligned_atomic: Label,
     ) -> Result<(), CodegenError> {
-        codegen_error!("singlepass i32_atomic_load_16u unimplemented");
+        self.memory_op(
+            addr,
+            memarg,
+            true,
+            2,
+            need_check,
+            imported_memories,
+            offset,
+            heap_access_oob,
+            unaligned_atomic,
+            |this, addr| this.emit_relaxed_ldr16(Size::S32, ret, Location::Memory(addr, 0)),
+        )
     }
     fn i32_save(
         &mut self,
@@ -3401,42 +3434,78 @@ impl Machine for MachineARM64 {
     }
     fn i32_atomic_save(
         &mut self,
-        _value: Location,
-        _memarg: &MemoryImmediate,
-        _target_addr: Location,
-        _need_check: bool,
-        _imported_memories: bool,
-        _offset: i32,
-        _heap_access_oob: Label,
-        _unaligned_atomic: Label,
+        target_value: Location,
+        memarg: &MemoryImmediate,
+        target_addr: Location,
+        need_check: bool,
+        imported_memories: bool,
+        offset: i32,
+        heap_access_oob: Label,
+        unaligned_atomic: Label,
     ) -> Result<(), CodegenError> {
-        codegen_error!("singlepass i32_atomic_save unimplemented");
+        self.memory_op(
+            target_addr,
+            memarg,
+            true,
+            4,
+            need_check,
+            imported_memories,
+            offset,
+            heap_access_oob,
+            unaligned_atomic,
+            |this, addr| this.emit_relaxed_str32(target_value, Location::Memory(addr, 0)),
+        )?;
+        self.assembler.emit_dmb()
     }
     fn i32_atomic_save_8(
         &mut self,
-        _value: Location,
-        _memarg: &MemoryImmediate,
-        _target_addr: Location,
-        _need_check: bool,
-        _imported_memories: bool,
-        _offset: i32,
-        _heap_access_oob: Label,
-        _unaligned_atomic: Label,
+        target_value: Location,
+        memarg: &MemoryImmediate,
+        target_addr: Location,
+        need_check: bool,
+        imported_memories: bool,
+        offset: i32,
+        heap_access_oob: Label,
+        unaligned_atomic: Label,
     ) -> Result<(), CodegenError> {
-        codegen_error!("singlepass i32_atomic_save_8 unimplemented");
+        self.memory_op(
+            target_addr,
+            memarg,
+            true,
+            1,
+            need_check,
+            imported_memories,
+            offset,
+            heap_access_oob,
+            unaligned_atomic,
+            |this, addr| this.emit_relaxed_str8(target_value, Location::Memory(addr, 0)),
+        )?;
+        self.assembler.emit_dmb()
     }
     fn i32_atomic_save_16(
         &mut self,
-        _value: Location,
-        _memarg: &MemoryImmediate,
-        _target_addr: Location,
-        _need_check: bool,
-        _imported_memories: bool,
-        _offset: i32,
-        _heap_access_oob: Label,
-        _unaligned_atomic: Label,
+        target_value: Location,
+        memarg: &MemoryImmediate,
+        target_addr: Location,
+        need_check: bool,
+        imported_memories: bool,
+        offset: i32,
+        heap_access_oob: Label,
+        unaligned_atomic: Label,
     ) -> Result<(), CodegenError> {
-        codegen_error!("singlepass i32_atomic_save_16 unimplemented");
+        self.memory_op(
+            target_addr,
+            memarg,
+            true,
+            2,
+            need_check,
+            imported_memories,
+            offset,
+            heap_access_oob,
+            unaligned_atomic,
+            |this, addr| this.emit_relaxed_str16(target_value, Location::Memory(addr, 0)),
+        )?;
+        self.assembler.emit_dmb()
     }
     // i32 atomic Add with i32
     fn i32_atomic_add(
@@ -4420,55 +4489,99 @@ impl Machine for MachineARM64 {
     }
     fn i64_atomic_load(
         &mut self,
-        _addr: Location,
-        _memarg: &MemoryImmediate,
-        _ret: Location,
-        _need_check: bool,
-        _imported_memories: bool,
-        _offset: i32,
-        _heap_access_oob: Label,
-        _unaligned_atomic: Label,
+        addr: Location,
+        memarg: &MemoryImmediate,
+        ret: Location,
+        need_check: bool,
+        imported_memories: bool,
+        offset: i32,
+        heap_access_oob: Label,
+        unaligned_atomic: Label,
     ) -> Result<(), CodegenError> {
-        codegen_error!("singlepass i64_atomic_load unimplemented");
+        self.memory_op(
+            addr,
+            memarg,
+            true,
+            8,
+            need_check,
+            imported_memories,
+            offset,
+            heap_access_oob,
+            unaligned_atomic,
+            |this, addr| this.emit_relaxed_ldr64(Size::S64, ret, Location::Memory(addr, 0)),
+        )
     }
     fn i64_atomic_load_8u(
         &mut self,
-        _addr: Location,
-        _memarg: &MemoryImmediate,
-        _ret: Location,
-        _need_check: bool,
-        _imported_memories: bool,
-        _offset: i32,
-        _heap_access_oob: Label,
-        _unaligned_atomic: Label,
+        addr: Location,
+        memarg: &MemoryImmediate,
+        ret: Location,
+        need_check: bool,
+        imported_memories: bool,
+        offset: i32,
+        heap_access_oob: Label,
+        unaligned_atomic: Label,
     ) -> Result<(), CodegenError> {
-        codegen_error!("singlepass i64_atomic_load_8u unimplemented");
+        self.memory_op(
+            addr,
+            memarg,
+            true,
+            1,
+            need_check,
+            imported_memories,
+            offset,
+            heap_access_oob,
+            unaligned_atomic,
+            |this, addr| this.emit_relaxed_ldr8(Size::S64, ret, Location::Memory(addr, 0)),
+        )
     }
     fn i64_atomic_load_16u(
         &mut self,
-        _addr: Location,
-        _memarg: &MemoryImmediate,
-        _ret: Location,
-        _need_check: bool,
-        _imported_memories: bool,
-        _offset: i32,
-        _heap_access_oob: Label,
-        _unaligned_atomic: Label,
+        addr: Location,
+        memarg: &MemoryImmediate,
+        ret: Location,
+        need_check: bool,
+        imported_memories: bool,
+        offset: i32,
+        heap_access_oob: Label,
+        unaligned_atomic: Label,
     ) -> Result<(), CodegenError> {
-        codegen_error!("singlepass i64_atomic_load_16u unimplemented");
+        self.memory_op(
+            addr,
+            memarg,
+            true,
+            2,
+            need_check,
+            imported_memories,
+            offset,
+            heap_access_oob,
+            unaligned_atomic,
+            |this, addr| this.emit_relaxed_ldr16(Size::S64, ret, Location::Memory(addr, 0)),
+        )
     }
     fn i64_atomic_load_32u(
         &mut self,
-        _addr: Location,
-        _memarg: &MemoryImmediate,
-        _ret: Location,
-        _need_check: bool,
-        _imported_memories: bool,
-        _offset: i32,
-        _heap_access_oob: Label,
-        _unaligned_atomic: Label,
+        addr: Location,
+        memarg: &MemoryImmediate,
+        ret: Location,
+        need_check: bool,
+        imported_memories: bool,
+        offset: i32,
+        heap_access_oob: Label,
+        unaligned_atomic: Label,
     ) -> Result<(), CodegenError> {
-        codegen_error!("singlepass i64_atomic_load_32u unimplemented");
+        self.memory_op(
+            addr,
+            memarg,
+            true,
+            4,
+            need_check,
+            imported_memories,
+            offset,
+            heap_access_oob,
+            unaligned_atomic,
+            |this, addr| this.emit_relaxed_ldr32(Size::S64, ret, Location::Memory(addr, 0)),
+        )
     }
     fn i64_save(
         &mut self,
@@ -4568,70 +4681,162 @@ impl Machine for MachineARM64 {
     }
     fn i64_atomic_save(
         &mut self,
-        _value: Location,
-        _memarg: &MemoryImmediate,
-        _target_addr: Location,
-        _need_check: bool,
-        _imported_memories: bool,
-        _offset: i32,
-        _heap_access_oob: Label,
-        _unaligned_atomic: Label,
+        target_value: Location,
+        memarg: &MemoryImmediate,
+        target_addr: Location,
+        need_check: bool,
+        imported_memories: bool,
+        offset: i32,
+        heap_access_oob: Label,
+        unaligned_atomic: Label,
     ) -> Result<(), CodegenError> {
-        codegen_error!("singlepass i64_atomic_save unimplemented");
+        self.memory_op(
+            target_addr,
+            memarg,
+            true,
+            8,
+            need_check,
+            imported_memories,
+            offset,
+            heap_access_oob,
+            unaligned_atomic,
+            |this, addr| this.emit_relaxed_str64(target_value, Location::Memory(addr, 0)),
+        )?;
+        self.assembler.emit_dmb()
     }
     fn i64_atomic_save_8(
         &mut self,
-        _value: Location,
-        _memarg: &MemoryImmediate,
-        _target_addr: Location,
-        _need_check: bool,
-        _imported_memories: bool,
-        _offset: i32,
-        _heap_access_oob: Label,
-        _unaligned_atomic: Label,
+        target_value: Location,
+        memarg: &MemoryImmediate,
+        target_addr: Location,
+        need_check: bool,
+        imported_memories: bool,
+        offset: i32,
+        heap_access_oob: Label,
+        unaligned_atomic: Label,
     ) -> Result<(), CodegenError> {
-        codegen_error!("singlepass i64_atomic_save_8 unimplemented");
+        self.memory_op(
+            target_addr,
+            memarg,
+            true,
+            1,
+            need_check,
+            imported_memories,
+            offset,
+            heap_access_oob,
+            unaligned_atomic,
+            |this, addr| this.emit_relaxed_str8(target_value, Location::Memory(addr, 0)),
+        )?;
+        self.assembler.emit_dmb()
     }
     fn i64_atomic_save_16(
         &mut self,
-        _value: Location,
-        _memarg: &MemoryImmediate,
-        _target_addr: Location,
-        _need_check: bool,
-        _imported_memories: bool,
-        _offset: i32,
-        _heap_access_oob: Label,
-        _unaligned_atomic: Label,
+        target_value: Location,
+        memarg: &MemoryImmediate,
+        target_addr: Location,
+        need_check: bool,
+        imported_memories: bool,
+        offset: i32,
+        heap_access_oob: Label,
+        unaligned_atomic: Label,
     ) -> Result<(), CodegenError> {
-        codegen_error!("singlepass i64_atomic_save_16 unimplemented");
+        self.memory_op(
+            target_addr,
+            memarg,
+            true,
+            2,
+            need_check,
+            imported_memories,
+            offset,
+            heap_access_oob,
+            unaligned_atomic,
+            |this, addr| this.emit_relaxed_str16(target_value, Location::Memory(addr, 0)),
+        )?;
+        self.assembler.emit_dmb()
     }
     fn i64_atomic_save_32(
         &mut self,
-        _value: Location,
-        _memarg: &MemoryImmediate,
-        _target_addr: Location,
-        _need_check: bool,
-        _imported_memories: bool,
-        _offset: i32,
-        _heap_access_oob: Label,
-        _unaligned_atomic: Label,
+        target_value: Location,
+        memarg: &MemoryImmediate,
+        target_addr: Location,
+        need_check: bool,
+        imported_memories: bool,
+        offset: i32,
+        heap_access_oob: Label,
+        unaligned_atomic: Label,
     ) -> Result<(), CodegenError> {
-        codegen_error!("singlepass i64_atomic_save_32 unimplemented");
+        self.memory_op(
+            target_addr,
+            memarg,
+            true,
+            4,
+            need_check,
+            imported_memories,
+            offset,
+            heap_access_oob,
+            unaligned_atomic,
+            |this, addr| this.emit_relaxed_str32(target_value, Location::Memory(addr, 0)),
+        )?;
+        self.assembler.emit_dmb()
     }
     // i64 atomic Add with i64
     fn i64_atomic_add(
         &mut self,
-        _loc: Location,
-        _target: Location,
-        _memarg: &MemoryImmediate,
-        _ret: Location,
-        _need_check: bool,
-        _imported_memories: bool,
-        _offset: i32,
-        _heap_access_oob: Label,
-        _unaligned_atomic: Label,
+        loc: Location,
+        target: Location,
+        memarg: &MemoryImmediate,
+        ret: Location,
+        need_check: bool,
+        imported_memories: bool,
+        offset: i32,
+        heap_access_oob: Label,
+        unaligned_atomic: Label,
     ) -> Result<(), CodegenError> {
-        codegen_error!("singlepass i64_atomic_add unimplemented");
+        self.memory_op(
+            target,
+            memarg,
+            true,
+            8,
+            need_check,
+            imported_memories,
+            offset,
+            heap_access_oob,
+            unaligned_atomic,
+            |this, addr| {
+                let mut temps = vec![];
+                let tmp1 = this.acquire_temp_gpr().ok_or(CodegenError {
+                    message: "singlepass cannot acquire temp gpr".to_string(),
+                })?;
+                let tmp2 = this.acquire_temp_gpr().ok_or(CodegenError {
+                    message: "singlepass cannot acquire temp gpr".to_string(),
+                })?;
+                let dst =
+                    this.location_to_reg(Size::S64, ret, &mut temps, ImmType::None, false, None)?;
+                let reread = this.get_label();
+
+                this.emit_label(reread)?;
+                this.assembler
+                    .emit_ldaxr(Size::S64, dst, Location::GPR(addr))?;
+                this.emit_binop_add64(dst, loc, Location::GPR(tmp1))?;
+                this.assembler.emit_stlxr(
+                    Size::S64,
+                    Location::GPR(tmp2),
+                    Location::GPR(tmp1),
+                    Location::GPR(addr),
+                )?;
+                this.assembler
+                    .emit_cbnz_label(Size::S32, Location::GPR(tmp2), reread)?;
+                this.assembler.emit_dmb()?;
+
+                if dst != ret {
+                    this.move_location(Size::S64, ret, dst)?;
+                }
+                for r in temps {
+                    this.release_gpr(r);
+                }
+                Ok(())
+            },
+        )
     }
     // i64 atomic Add with u8
     fn i64_atomic_add_8u(
