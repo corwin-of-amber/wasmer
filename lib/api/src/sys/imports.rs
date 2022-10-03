@@ -140,7 +140,7 @@ impl Imports {
                 ret.define(
                     "env",
                     "memory",
-                    Memory::new_from_existing(store, memory.clone().into()),
+                    Memory::new_from_existing(store, memory.into()),
                 );
             }
         };
