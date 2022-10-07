@@ -4395,47 +4395,173 @@ impl Machine for MachineARM64 {
     // i32 atomic Exchange with i32
     fn i32_atomic_xchg(
         &mut self,
-        _loc: Location,
-        _target: Location,
-        _memarg: &MemoryImmediate,
-        _ret: Location,
-        _need_check: bool,
-        _imported_memories: bool,
-        _offset: i32,
-        _heap_access_oob: Label,
-        _unaligned_atomic: Label,
+        loc: Location,
+        target: Location,
+        memarg: &MemoryImmediate,
+        ret: Location,
+        need_check: bool,
+        imported_memories: bool,
+        offset: i32,
+        heap_access_oob: Label,
+        unaligned_atomic: Label,
     ) -> Result<(), CodegenError> {
-        codegen_error!("singlepass i32_atomic_xchg unimplemented");
+        self.memory_op(
+            target,
+            memarg,
+            true,
+            4,
+            need_check,
+            imported_memories,
+            offset,
+            heap_access_oob,
+            unaligned_atomic,
+            |this, addr| {
+                let mut temps = vec![];
+                let tmp = this.acquire_temp_gpr().ok_or(CodegenError {
+                    message: "singlepass cannot acquire temp gpr".to_string(),
+                })?;
+                let dst =
+                    this.location_to_reg(Size::S32, ret, &mut temps, ImmType::None, false, None)?;
+                let org =
+                    this.location_to_reg(Size::S32, loc, &mut temps, ImmType::None, false, None)?;
+                let reread = this.get_label();
+
+                this.emit_label(reread)?;
+                this.assembler
+                    .emit_ldaxr(Size::S32, dst, Location::GPR(addr))?;
+                this.assembler.emit_stlxr(
+                    Size::S32,
+                    Location::GPR(tmp),
+                    org,
+                    Location::GPR(addr),
+                )?;
+                this.assembler
+                    .emit_cbnz_label(Size::S32, Location::GPR(tmp), reread)?;
+                this.assembler.emit_dmb()?;
+
+                if dst != ret {
+                    this.move_location(Size::S32, ret, dst)?;
+                }
+                for r in temps {
+                    this.release_gpr(r);
+                }
+                Ok(())
+            },
+        )
     }
     // i32 atomic Exchange with u8
     fn i32_atomic_xchg_8u(
         &mut self,
-        _loc: Location,
-        _target: Location,
-        _memarg: &MemoryImmediate,
-        _ret: Location,
-        _need_check: bool,
-        _imported_memories: bool,
-        _offset: i32,
-        _heap_access_oob: Label,
-        _unaligned_atomic: Label,
+        loc: Location,
+        target: Location,
+        memarg: &MemoryImmediate,
+        ret: Location,
+        need_check: bool,
+        imported_memories: bool,
+        offset: i32,
+        heap_access_oob: Label,
+        unaligned_atomic: Label,
     ) -> Result<(), CodegenError> {
-        codegen_error!("singlepass i32_atomic_xchg_8u unimplemented");
+        self.memory_op(
+            target,
+            memarg,
+            true,
+            1,
+            need_check,
+            imported_memories,
+            offset,
+            heap_access_oob,
+            unaligned_atomic,
+            |this, addr| {
+                let mut temps = vec![];
+                let tmp = this.acquire_temp_gpr().ok_or(CodegenError {
+                    message: "singlepass cannot acquire temp gpr".to_string(),
+                })?;
+                let dst =
+                    this.location_to_reg(Size::S32, ret, &mut temps, ImmType::None, false, None)?;
+                let org =
+                    this.location_to_reg(Size::S32, loc, &mut temps, ImmType::None, false, None)?;
+                let reread = this.get_label();
+
+                this.emit_label(reread)?;
+                this.assembler
+                    .emit_ldaxrb(Size::S32, dst, Location::GPR(addr))?;
+                this.assembler.emit_stlxrb(
+                    Size::S32,
+                    Location::GPR(tmp),
+                    org,
+                    Location::GPR(addr),
+                )?;
+                this.assembler
+                    .emit_cbnz_label(Size::S32, Location::GPR(tmp), reread)?;
+                this.assembler.emit_dmb()?;
+
+                if dst != ret {
+                    this.move_location(Size::S32, ret, dst)?;
+                }
+                for r in temps {
+                    this.release_gpr(r);
+                }
+                Ok(())
+            },
+        )
     }
     // i32 atomic Exchange with u16
     fn i32_atomic_xchg_16u(
         &mut self,
-        _loc: Location,
-        _target: Location,
-        _memarg: &MemoryImmediate,
-        _ret: Location,
-        _need_check: bool,
-        _imported_memories: bool,
-        _offset: i32,
-        _heap_access_oob: Label,
-        _unaligned_atomic: Label,
+        loc: Location,
+        target: Location,
+        memarg: &MemoryImmediate,
+        ret: Location,
+        need_check: bool,
+        imported_memories: bool,
+        offset: i32,
+        heap_access_oob: Label,
+        unaligned_atomic: Label,
     ) -> Result<(), CodegenError> {
-        codegen_error!("singlepass i32_atomic_xchg_16u unimplemented");
+        self.memory_op(
+            target,
+            memarg,
+            true,
+            2,
+            need_check,
+            imported_memories,
+            offset,
+            heap_access_oob,
+            unaligned_atomic,
+            |this, addr| {
+                let mut temps = vec![];
+                let tmp = this.acquire_temp_gpr().ok_or(CodegenError {
+                    message: "singlepass cannot acquire temp gpr".to_string(),
+                })?;
+                let dst =
+                    this.location_to_reg(Size::S32, ret, &mut temps, ImmType::None, false, None)?;
+                let org =
+                    this.location_to_reg(Size::S32, loc, &mut temps, ImmType::None, false, None)?;
+                let reread = this.get_label();
+
+                this.emit_label(reread)?;
+                this.assembler
+                    .emit_ldaxrh(Size::S32, dst, Location::GPR(addr))?;
+                this.assembler.emit_stlxrh(
+                    Size::S32,
+                    Location::GPR(tmp),
+                    org,
+                    Location::GPR(addr),
+                )?;
+                this.assembler
+                    .emit_cbnz_label(Size::S32, Location::GPR(tmp), reread)?;
+                this.assembler.emit_dmb()?;
+
+                if dst != ret {
+                    this.move_location(Size::S32, ret, dst)?;
+                }
+                for r in temps {
+                    this.release_gpr(r);
+                }
+                Ok(())
+            },
+        )
     }
     // i32 atomic Exchange with i32
     fn i32_atomic_cmpxchg(
@@ -6622,62 +6748,230 @@ impl Machine for MachineARM64 {
     // i64 atomic Exchange with i64
     fn i64_atomic_xchg(
         &mut self,
-        _loc: Location,
-        _target: Location,
-        _memarg: &MemoryImmediate,
-        _ret: Location,
-        _need_check: bool,
-        _imported_memories: bool,
-        _offset: i32,
-        _heap_access_oob: Label,
-        _unaligned_atomic: Label,
+        loc: Location,
+        target: Location,
+        memarg: &MemoryImmediate,
+        ret: Location,
+        need_check: bool,
+        imported_memories: bool,
+        offset: i32,
+        heap_access_oob: Label,
+        unaligned_atomic: Label,
     ) -> Result<(), CodegenError> {
-        codegen_error!("singlepass i64_atomic_xchg unimplemented");
+        self.memory_op(
+            target,
+            memarg,
+            true,
+            8,
+            need_check,
+            imported_memories,
+            offset,
+            heap_access_oob,
+            unaligned_atomic,
+            |this, addr| {
+                let mut temps = vec![];
+                let tmp = this.acquire_temp_gpr().ok_or(CodegenError {
+                    message: "singlepass cannot acquire temp gpr".to_string(),
+                })?;
+                let dst =
+                    this.location_to_reg(Size::S64, ret, &mut temps, ImmType::None, false, None)?;
+                let org =
+                    this.location_to_reg(Size::S64, loc, &mut temps, ImmType::None, false, None)?;
+                let reread = this.get_label();
+
+                this.emit_label(reread)?;
+                this.assembler
+                    .emit_ldaxr(Size::S64, dst, Location::GPR(addr))?;
+                this.assembler.emit_stlxr(
+                    Size::S64,
+                    Location::GPR(tmp),
+                    org,
+                    Location::GPR(addr),
+                )?;
+                this.assembler
+                    .emit_cbnz_label(Size::S32, Location::GPR(tmp), reread)?;
+                this.assembler.emit_dmb()?;
+
+                if dst != ret {
+                    this.move_location(Size::S64, ret, dst)?;
+                }
+                for r in temps {
+                    this.release_gpr(r);
+                }
+                Ok(())
+            },
+        )
     }
     // i64 atomic Exchange with u8
     fn i64_atomic_xchg_8u(
         &mut self,
-        _loc: Location,
-        _target: Location,
-        _memarg: &MemoryImmediate,
-        _ret: Location,
-        _need_check: bool,
-        _imported_memories: bool,
-        _offset: i32,
-        _heap_access_oob: Label,
-        _unaligned_atomic: Label,
+        loc: Location,
+        target: Location,
+        memarg: &MemoryImmediate,
+        ret: Location,
+        need_check: bool,
+        imported_memories: bool,
+        offset: i32,
+        heap_access_oob: Label,
+        unaligned_atomic: Label,
     ) -> Result<(), CodegenError> {
-        codegen_error!("singlepass i64_atomic_xchg_8u unimplemented");
+        self.memory_op(
+            target,
+            memarg,
+            true,
+            1,
+            need_check,
+            imported_memories,
+            offset,
+            heap_access_oob,
+            unaligned_atomic,
+            |this, addr| {
+                let mut temps = vec![];
+                let tmp = this.acquire_temp_gpr().ok_or(CodegenError {
+                    message: "singlepass cannot acquire temp gpr".to_string(),
+                })?;
+                let dst =
+                    this.location_to_reg(Size::S64, ret, &mut temps, ImmType::None, false, None)?;
+                let org =
+                    this.location_to_reg(Size::S64, loc, &mut temps, ImmType::None, false, None)?;
+                let reread = this.get_label();
+
+                this.emit_label(reread)?;
+                this.assembler
+                    .emit_ldaxrb(Size::S64, dst, Location::GPR(addr))?;
+                this.assembler.emit_stlxrb(
+                    Size::S64,
+                    Location::GPR(tmp),
+                    org,
+                    Location::GPR(addr),
+                )?;
+                this.assembler
+                    .emit_cbnz_label(Size::S32, Location::GPR(tmp), reread)?;
+                this.assembler.emit_dmb()?;
+
+                if dst != ret {
+                    this.move_location(Size::S64, ret, dst)?;
+                }
+                for r in temps {
+                    this.release_gpr(r);
+                }
+                Ok(())
+            },
+        )
     }
     // i64 atomic Exchange with u16
     fn i64_atomic_xchg_16u(
         &mut self,
-        _loc: Location,
-        _target: Location,
-        _memarg: &MemoryImmediate,
-        _ret: Location,
-        _need_check: bool,
-        _imported_memories: bool,
-        _offset: i32,
-        _heap_access_oob: Label,
-        _unaligned_atomic: Label,
+        loc: Location,
+        target: Location,
+        memarg: &MemoryImmediate,
+        ret: Location,
+        need_check: bool,
+        imported_memories: bool,
+        offset: i32,
+        heap_access_oob: Label,
+        unaligned_atomic: Label,
     ) -> Result<(), CodegenError> {
-        codegen_error!("singlepass i64_atomic_xchg_16u unimplemented");
+        self.memory_op(
+            target,
+            memarg,
+            true,
+            2,
+            need_check,
+            imported_memories,
+            offset,
+            heap_access_oob,
+            unaligned_atomic,
+            |this, addr| {
+                let mut temps = vec![];
+                let tmp = this.acquire_temp_gpr().ok_or(CodegenError {
+                    message: "singlepass cannot acquire temp gpr".to_string(),
+                })?;
+                let dst =
+                    this.location_to_reg(Size::S64, ret, &mut temps, ImmType::None, false, None)?;
+                let org =
+                    this.location_to_reg(Size::S64, loc, &mut temps, ImmType::None, false, None)?;
+                let reread = this.get_label();
+
+                this.emit_label(reread)?;
+                this.assembler
+                    .emit_ldaxrh(Size::S64, dst, Location::GPR(addr))?;
+                this.assembler.emit_stlxrh(
+                    Size::S64,
+                    Location::GPR(tmp),
+                    org,
+                    Location::GPR(addr),
+                )?;
+                this.assembler
+                    .emit_cbnz_label(Size::S32, Location::GPR(tmp), reread)?;
+                this.assembler.emit_dmb()?;
+
+                if dst != ret {
+                    this.move_location(Size::S64, ret, dst)?;
+                }
+                for r in temps {
+                    this.release_gpr(r);
+                }
+                Ok(())
+            },
+        )
     }
     // i64 atomic Exchange with u32
     fn i64_atomic_xchg_32u(
         &mut self,
-        _loc: Location,
-        _target: Location,
-        _memarg: &MemoryImmediate,
-        _ret: Location,
-        _need_check: bool,
-        _imported_memories: bool,
-        _offset: i32,
-        _heap_access_oob: Label,
-        _unaligned_atomic: Label,
+        loc: Location,
+        target: Location,
+        memarg: &MemoryImmediate,
+        ret: Location,
+        need_check: bool,
+        imported_memories: bool,
+        offset: i32,
+        heap_access_oob: Label,
+        unaligned_atomic: Label,
     ) -> Result<(), CodegenError> {
-        codegen_error!("singlepass i64_atomic_xchg_32u unimplemented");
+        self.memory_op(
+            target,
+            memarg,
+            true,
+            4,
+            need_check,
+            imported_memories,
+            offset,
+            heap_access_oob,
+            unaligned_atomic,
+            |this, addr| {
+                let mut temps = vec![];
+                let tmp = this.acquire_temp_gpr().ok_or(CodegenError {
+                    message: "singlepass cannot acquire temp gpr".to_string(),
+                })?;
+                let dst =
+                    this.location_to_reg(Size::S64, ret, &mut temps, ImmType::None, false, None)?;
+                let org =
+                    this.location_to_reg(Size::S64, loc, &mut temps, ImmType::None, false, None)?;
+                let reread = this.get_label();
+
+                this.emit_label(reread)?;
+                this.assembler
+                    .emit_ldaxr(Size::S32, dst, Location::GPR(addr))?;
+                this.assembler.emit_stlxr(
+                    Size::S32,
+                    Location::GPR(tmp),
+                    org,
+                    Location::GPR(addr),
+                )?;
+                this.assembler
+                    .emit_cbnz_label(Size::S32, Location::GPR(tmp), reread)?;
+                this.assembler.emit_dmb()?;
+
+                if dst != ret {
+                    this.move_location(Size::S64, ret, dst)?;
+                }
+                for r in temps {
+                    this.release_gpr(r);
+                }
+                Ok(())
+            },
+        )
     }
     // i64 atomic Exchange with i64
     fn i64_atomic_cmpxchg(
