@@ -85,7 +85,8 @@ pub fn wasi_import_shared_memory(
     _imports: &mut Imports,
     _module: &Module,
     _store: &mut impl AsStoreMut,
-) { }
+) {
+}
 
 /// The version of WASI. This is determined by the imports namespace
 /// string.
