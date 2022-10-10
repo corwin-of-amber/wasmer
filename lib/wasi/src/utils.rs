@@ -1,6 +1,7 @@
 use super::types::*;
 use std::collections::BTreeSet;
-use wasmer::Module;
+use wasmer::vm::VMSharedMemory;
+use wasmer::{AsStoreMut, Imports, Memory, Module};
 
 #[allow(dead_code)]
 /// Check if a provided module is compiled for some version of WASI.
@@ -46,6 +47,36 @@ pub fn map_io_err(err: std::io::Error) -> __wasi_errno_t {
         ErrorKind::Unsupported => __WASI_ENOTSUP,
         _ => __WASI_EIO,
     }
+}
+
+/// Imports (any) shared memory into the imports.
+/// (if the module does not import memory then this function is ignored)
+pub fn wasi_import_shared_memory(
+    imports: &mut Imports,
+    module: &Module,
+    store: &mut impl AsStoreMut,
+) {
+    // Determine if shared memory needs to be created and imported
+    let shared_memory = module
+        .imports()
+        .memories()
+        .next()
+        .map(|a| *a.ty())
+        .map(|ty| {
+            let style = store.as_store_ref().tunables().memory_style(&ty);
+            VMSharedMemory::new(&ty, &style).unwrap()
+        });
+
+    if let Some(memory) = shared_memory {
+        // if the memory has already be defined, don't redefine it!
+        if !imports.exists("env", "memory") {
+            imports.define(
+                "env",
+                "memory",
+                Memory::new_from_existing(store, memory.into()),
+            );
+        }
+    };
 }
 
 /// The version of WASI. This is determined by the imports namespace
