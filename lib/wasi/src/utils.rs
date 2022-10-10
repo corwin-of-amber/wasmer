@@ -1,4 +1,5 @@
 use std::collections::BTreeSet;
+#[cfg(not(feature = "js"))]
 use wasmer::vm::VMSharedMemory;
 use wasmer::{AsStoreMut, Imports, Memory, Module};
 use wasmer_wasi_types::wasi::Errno;
@@ -51,6 +52,7 @@ pub fn map_io_err(err: std::io::Error) -> Errno {
 
 /// Imports (any) shared memory into the imports.
 /// (if the module does not import memory then this function is ignored)
+#[cfg(not(feature = "js"))]
 pub fn wasi_import_shared_memory(
     imports: &mut Imports,
     module: &Module,
@@ -78,6 +80,12 @@ pub fn wasi_import_shared_memory(
         }
     };
 }
+#[cfg(feature = "js")]
+pub fn wasi_import_shared_memory(
+    _imports: &mut Imports,
+    _module: &Module,
+    _store: &mut impl AsStoreMut,
+) { }
 
 /// The version of WASI. This is determined by the imports namespace
 /// string.
