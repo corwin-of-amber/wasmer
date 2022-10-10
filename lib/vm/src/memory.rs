@@ -11,8 +11,8 @@ use more_asserts::assert_ge;
 use std::cell::UnsafeCell;
 use std::convert::TryInto;
 use std::ptr::NonNull;
-use std::sync::{Arc, RwLock};
 use std::slice;
+use std::sync::{Arc, RwLock};
 use wasmer_types::{Bytes, MemoryError, MemoryStyle, MemoryType, Pages};
 
 // The memory mapped area
