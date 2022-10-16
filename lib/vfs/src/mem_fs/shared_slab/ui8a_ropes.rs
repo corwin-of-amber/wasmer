@@ -20,9 +20,6 @@ impl Chunked {
     }
 
     pub fn read_u32(&self, chunk: usize, index: usize) -> u32 {
-        if chunk * self.chunk_size > self.abuf.byte_length() as usize {
-            t(format!("out of range: {chunk}").as_str());
-        }
         self.data_view().get_uint32(self.address(chunk, 4 * index))
     }
 
@@ -30,6 +27,7 @@ impl Chunked {
         self.data_view().set_uint32(self.address(chunk, 4 * index), val);
     }
 
+    #[allow(dead_code)]
     pub fn read_bytes(&self, chunk: usize, byte_offset: usize, byte_length: usize) -> Vec<u8> {
         assert!(byte_offset < self.chunk_size);
         let byte_length = byte_length.min(self.chunk_size - byte_offset);
@@ -55,11 +53,6 @@ impl Chunked {
         byte_length
     }
 }
-
-fn t(s: &str) {
-    web_sys::console::log_2(&"[Ropes]".into(), &s.into());
-}
-
 
 pub struct Ropes {
     storage: Chunked,
@@ -93,6 +86,7 @@ impl Ropes {
         self.next_free
     }
 
+    #[allow(dead_code)]
     pub fn insert(&mut self, data: &[u8]) -> (usize, u32) {
         let key = self.alloc();
         (key, self.insert_at(key, data))

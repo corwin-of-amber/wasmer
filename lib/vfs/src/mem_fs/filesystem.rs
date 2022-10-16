@@ -2,33 +2,39 @@
 
 use super::*;
 use crate::{DirEntry, FileType, FsError, Metadata, OpenOptions, ReadDir, Result};
-use slab::Slab;
 use std::convert::identity;
 use std::ffi::OsString;
 use std::fmt;
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
-use js_sys::Uint8Array;
+use js_sys::ArrayBuffer;
 use shared_slab::HookedSlab;
+use crate::mem_fs::slab_adapter::SlabAdapter;
 
 /// The in-memory file system!
 ///
 /// It's a thin wrapper around [`FileSystemInner`]. This `FileSystem`
 /// type can be cloned, it's a light copy of the `FileSystemInner`
 /// (which is behind a `Arc` + `RwLock`.
-#[derive(Clone, Default)]
-pub struct FileSystem {
-    pub(super) inner: Arc<RwLock<FileSystemInner>>,
+#[derive(Default)]
+pub struct FileSystem<Slab: SlabAdapter<Node> = slab::Slab<Node>> {
+    pub(super) inner: Arc<RwLock<FileSystemInner<Slab>>>,
 }
 
-impl FileSystem {
-    pub fn mount(&mut self, ui8a: Uint8Array) -> Result<()> {
-        self.inner.try_write().map_err(|_| FsError::Lock)?.storage.attach(ui8a)
+impl<Slab> Clone for FileSystem<Slab> where Slab: SlabAdapter<Node> {
+    fn clone(&self) -> Self {
+        FileSystem { inner: self.inner.clone() }
     }
 }
 
-impl crate::FileSystem for FileSystem {
+impl FileSystem<HookedSlab<Node>> {
+    pub fn mount(&mut self, abuf: ArrayBuffer) -> Result<()> {
+        self.inner.try_write().map_err(|_| FsError::Lock)?.storage.attach(abuf)
+    }
+}
+
+impl<Slab> crate::FileSystem for FileSystem<Slab> where Slab: SlabAdapter<Node> {
     fn read_dir(&self, path: &Path) -> Result<ReadDir> {
         // Read lock.
         let fs = self.inner.try_read().map_err(|_| FsError::Lock)?;
@@ -88,7 +94,7 @@ impl crate::FileSystem for FileSystem {
             let mut fs = self.inner.try_write().map_err(|_| FsError::Lock)?;
 
             // Creating the directory in the storage.
-            let inode_of_directory = fs.storage.vacant_entry().key();
+            let inode_of_directory = fs.storage.vacant_entry_key();
             let real_inode_of_directory = fs.storage.insert(Node::Directory {
                 inode: inode_of_directory,
                 name: name_of_directory,
@@ -291,15 +297,15 @@ impl crate::FileSystem for FileSystem {
     }
 
     fn new_open_options(&self) -> OpenOptions {
-        OpenOptions::new(Box::new(FileOpener {
+        OpenOptions::new(Box::new(FileOpener::<Slab> {
             filesystem: self.clone(),
         }))
     }
 }
 
-impl fmt::Debug for FileSystem {
+impl<Slab> fmt::Debug for FileSystem<Slab> where Slab: SlabAdapter<Node> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let fs: &FileSystemInner = &self.inner.read().unwrap();
+        let fs: &FileSystemInner<Slab> = &self.inner.read().unwrap();
 
         fs.fmt(formatter)
     }
@@ -307,11 +313,11 @@ impl fmt::Debug for FileSystem {
 
 /// The core of the file system. It contains a collection of `Node`s,
 /// indexed by their respective `Inode` in a slab.
-pub(super) struct FileSystemInner {
-    pub(super) storage: HookedSlab<Node>,
+pub(super) struct FileSystemInner<Slab: SlabAdapter<Node>> {
+    pub(super) storage: Slab //HookedSlab<Node>,
 }
 
-impl FileSystemInner {
+impl<Slab> FileSystemInner<Slab> where Slab: SlabAdapter<Node> {
     /// Get the inode associated to a path if it exists.
     pub(super) fn inode_of(&self, path: &Path) -> Result<Inode> {
         // SAFETY: The root node always exists, so it's safe to unwrap here.
@@ -558,7 +564,7 @@ impl FileSystemInner {
     }
 }
 
-impl fmt::Debug for FileSystemInner {
+impl<Slab> fmt::Debug for FileSystemInner<Slab> where Slab: SlabAdapter<Node> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(
             formatter,
@@ -567,9 +573,9 @@ impl fmt::Debug for FileSystemInner {
             ty = "type",
         )?;
 
-        fn debug(
+        fn debug<Slab: SlabAdapter<Node>>(
             nodes: Vec<&Node>,
-            slf: &FileSystemInner,
+            slf: &FileSystemInner<Slab>,
             formatter: &mut fmt::Formatter<'_>,
             indentation: usize,
         ) -> fmt::Result {
@@ -612,11 +618,11 @@ impl fmt::Debug for FileSystemInner {
     }
 }
 
-impl Default for FileSystemInner {
+impl<Slab> Default for FileSystemInner<Slab> where Slab: SlabAdapter<Node> {
     fn default() -> Self {
         let time = time();
 
-        let mut slab = HookedSlab::new();
+        let mut slab = Slab::new();
         slab.insert(Node::Directory {
             inode: ROOT_INODE,
             name: OsString::from("/"),

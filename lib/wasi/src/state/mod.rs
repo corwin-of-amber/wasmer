@@ -345,7 +345,7 @@ pub(crate) fn default_fs_backing() -> Box<dyn wasmer_vfs::FileSystem> {
         if #[cfg(feature = "host-fs")] {
             Box::new(wasmer_vfs::host_fs::FileSystem::default())
         } else if #[cfg(feature = "mem-fs")] {
-            Box::new(wasmer_vfs::mem_fs::FileSystem::default())
+            Box::new(<wasmer_vfs::mem_fs::FileSystem>::default())
         } else {
             Box::new(FallbackFileSystem::default())
         }

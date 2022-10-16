@@ -2,10 +2,11 @@ mod file;
 mod file_opener;
 mod filesystem;
 mod stdio;
-mod shared_slab;
+mod slab_adapter;
+pub mod shared_slab;
 
 use file::{File, FileHandle};
-pub use file_opener::FileOpener;
+pub(crate) use file_opener::FileOpener;
 pub use filesystem::FileSystem;
 pub use stdio::{Stderr, Stdin, Stdout};
 
@@ -20,7 +21,7 @@ type Inode = usize;
 const ROOT_INODE: Inode = 0;
 
 #[derive(Debug, Serialize, Deserialize)]
-enum Node {
+pub enum Node {
     File {
         inode: Inode,
         #[serde(serialize_with="serialize_osstring")]

@@ -9,6 +9,7 @@ use std::convert::TryInto;
 use std::fmt;
 use std::io::{self, Read, Seek, Write};
 use std::str;
+use crate::mem_fs::slab_adapter::SlabAdapter;
 
 /// A file handle. The file system doesn't return the [`File`] type
 /// directly, but rather this `FileHandle` type, which contains the
@@ -18,18 +19,18 @@ use std::str;
 /// still exists in the file system. After that, the operation is
 /// delegated to the file itself.
 #[derive(Clone)]
-pub(super) struct FileHandle {
+pub(super) struct FileHandle<Slab: SlabAdapter<Node>> {
     inode: Inode,
-    filesystem: FileSystem,
+    filesystem: FileSystem<Slab>,
     readable: bool,
     writable: bool,
     append_mode: bool,
 }
 
-impl FileHandle {
+impl<Slab> FileHandle<Slab> where Slab: SlabAdapter<Node> {
     pub(super) fn new(
         inode: Inode,
-        filesystem: FileSystem,
+        filesystem: FileSystem<Slab>,
         readable: bool,
         writable: bool,
         append_mode: bool,
@@ -44,7 +45,7 @@ impl FileHandle {
     }
 }
 
-impl VirtualFile for FileHandle {
+impl<Slab> VirtualFile for FileHandle<Slab> where Slab: 'static + SlabAdapter<Node> {
     fn last_accessed(&self) -> u64 {
         let fs = match self.filesystem.inner.try_read() {
             Ok(fs) => fs,
@@ -402,7 +403,7 @@ mod test_virtual_file {
     }
 }
 
-impl Read for FileHandle {
+impl<Slab> Read for FileHandle<Slab> where Slab: SlabAdapter<Node> {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         if !self.readable {
             return Err(io::Error::new(
@@ -513,7 +514,7 @@ impl Read for FileHandle {
     }
 }
 
-impl Seek for FileHandle {
+impl<Slab> Seek for FileHandle<Slab> where Slab: SlabAdapter<Node> {
     fn seek(&mut self, position: io::SeekFrom) -> io::Result<u64> {
         // In `append` mode, it's not possible to seek in the file. In
         // [`open(2)`](https://man7.org/linux/man-pages/man2/open.2.html),
@@ -553,7 +554,7 @@ impl Seek for FileHandle {
     }
 }
 
-impl Write for FileHandle {
+impl<Slab> Write for FileHandle<Slab> where Slab: SlabAdapter<Node> {
     fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
         if !self.writable {
             return Err(io::Error::new(
@@ -841,7 +842,7 @@ mod test_read_write_seek {
     }
 }
 
-impl fmt::Debug for FileHandle {
+impl<Slab> fmt::Debug for FileHandle<Slab> where Slab: SlabAdapter<Node> {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
             .debug_struct("FileHandle")
@@ -853,7 +854,7 @@ impl fmt::Debug for FileHandle {
 /// The real file! It is simply a buffer of bytes with a cursor that
 /// represents a read/write position in the buffer.
 #[derive(Debug, Serialize, Deserialize)]
-pub(super) struct File {
+pub struct File {
     buffer: Vec<u8>,
     cursor: usize,
 }

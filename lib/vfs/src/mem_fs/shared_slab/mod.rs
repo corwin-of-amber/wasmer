@@ -3,13 +3,20 @@ pub(crate) mod ui8a_ropes;
 use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
-use js_sys::Uint8Array;
+use js_sys::ArrayBuffer;
 
 use ui8a_ropes::{Chunked, Ropes};
 use crate::{Result, FsError};
+use crate::mem_fs::slab_adapter::SlabAdapter;
 
 
-// #[derive(Clone)]
+/**
+ * A `HookedSlab` uses a backing `Ropes` storage to place nodes.
+ * Data is serialized and deserialized when it is modified or accessed;
+ * this allows sharing the `HookedSlab` with Web Workers by building
+ * `Ropes` over a JavaScript `SharedArrayBuffer`.
+ */
+// #[derive(Default, Clone)]  <- cannot! this will impose a constraint on T
 pub struct HookedSlab<T: Serialize + for <'de> Deserialize<'de>> {
     cache: UnsafeCell<HashMap<usize, VEntry<T>>>,
     ropes: Option<UnsafeCell<Ropes>>,
@@ -20,17 +27,11 @@ struct VEntry<T> {
     ver: u32, val: T
 }
 
-pub struct VacantEntry {
-    key: usize
-}
-
-impl VacantEntry { pub fn key(&self) -> usize { self.key } }
-
 impl<T> HookedSlab<T> where T: Serialize + for <'de> Deserialize<'de> {
-    pub fn attach(&mut self, ui8a: Uint8Array) -> Result<()> {
+    pub fn attach(&mut self, abuf: ArrayBuffer) -> Result<()> {
         t("attach");
         self.ropes = Some(UnsafeCell::new(
-            Ropes::new(Chunked::new(ui8a.buffer(), 1024))));
+            Ropes::new(Chunked::new(abuf, 1024))));
         t(format!("attach: root @ ver {}", self._ropes().unwrap().ver_peek(0)).as_str());
         if self._ropes().unwrap().ver_peek(0) == 0 {
             self.push(0, &self._cache().get(&0).unwrap().val)?;
@@ -126,8 +127,26 @@ impl<T: Serialize + for <'de> Deserialize<'de>> HookedSlab<T> {
         self.flush_mut(key);
         key
     }
-    pub fn remove(&mut self, key: usize) -> T { t("remove"); todo!() }
+    pub fn remove(&mut self, _key: usize) -> T { t("remove"); todo!() }
 
     pub fn iter(&self) -> slab::Iter<'_, T> { t("iter"); todo!() }
-    pub fn vacant_entry(&mut self) -> VacantEntry { VacantEntry { key: self.alloc_peek() } }
+}
+
+impl<T> Default for HookedSlab<T> where T: Serialize + for <'de> Deserialize<'de> {
+    fn default() -> Self { HookedSlab::new() }
+}
+
+impl<T> SlabAdapter<T> for HookedSlab<T> where T: 'static + Serialize + for <'de> Deserialize<'de> {
+    fn new() -> Self { HookedSlab::new() }
+
+    fn get(&self, key: usize) -> Option<&T> { HookedSlab::get(self, key) }
+    fn get_mut(&mut self, key: usize) -> Option<&mut T> { HookedSlab::get_mut(self, key) }
+
+    fn flush_mut(&self, key: usize) { HookedSlab::flush_mut(self, key) }
+
+    fn insert(&mut self, val: T) -> usize { HookedSlab::insert(self, val) }
+    fn remove(&mut self, key: usize) -> T { HookedSlab::remove(self, key) }
+
+    fn iter(&self) -> Box<dyn Iterator<Item = (usize, &'_ T)> + '_> { todo!() }
+    fn vacant_entry_key(&mut self) -> usize { self.alloc_peek() }
 }

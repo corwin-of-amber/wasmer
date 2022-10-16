@@ -2,14 +2,15 @@ use super::*;
 use crate::{FileType, FsError, Metadata, OpenOptionsConfig, Result, VirtualFile};
 use std::io::{self, Seek};
 use std::path::Path;
+use crate::mem_fs::slab_adapter::SlabAdapter;
 
 /// The type that is responsible to open a file.
 #[derive(Debug, Clone)]
-pub struct FileOpener {
-    pub(super) filesystem: FileSystem,
+pub(crate) struct FileOpener<Slab: SlabAdapter<Node>> {
+    pub(super) filesystem: FileSystem<Slab>,
 }
 
-impl crate::FileOpener for FileOpener {
+impl<Slab> crate::FileOpener for FileOpener<Slab> where Slab: SlabAdapter<Node> {
     fn open(
         &mut self,
         path: &Path,
@@ -123,7 +124,7 @@ impl crate::FileOpener for FileOpener {
                 let file = File::new();
 
                 // Creating the file in the storage.
-                let inode_of_file = fs.storage.vacant_entry().key();
+                let inode_of_file = fs.storage.vacant_entry_key();
                 let real_inode_of_file = fs.storage.insert(Node::File {
                     inode: inode_of_file,
                     name: name_of_file,
@@ -158,7 +159,7 @@ impl crate::FileOpener for FileOpener {
             None => return Err(FsError::PermissionDenied),
         };
 
-        Ok(Box::new(FileHandle::new(
+        Ok(Box::new(FileHandle::<Slab>::new(
             inode_of_file,
             self.filesystem.clone(),
             read,
