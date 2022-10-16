@@ -3,6 +3,8 @@ use std::ffi::OsString;
 use std::fmt;
 use std::io::{self, Read, Seek, Write};
 use std::path::{Path, PathBuf};
+use serde::Serialize;
+use serde_derive::Deserialize;
 use thiserror::Error;
 
 #[cfg(all(not(feature = "host-fs"), not(feature = "mem-fs")))]
@@ -417,7 +419,7 @@ impl DirEntry {
 }
 
 #[allow(clippy::len_without_is_empty)] // Clippy thinks it's an iterator.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 // TODO: review this, proper solution would probably use a trait object internally
 pub struct Metadata {
     pub ft: FileType,
@@ -457,7 +459,7 @@ impl Metadata {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 // TODO: review this, proper solution would probably use a trait object internally
 pub struct FileType {
     pub dir: bool,

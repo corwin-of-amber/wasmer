@@ -115,6 +115,7 @@ impl VirtualFile for FileHandle {
             }
             _ => return Err(FsError::NotAFile),
         }
+        fs.storage.flush_mut(self.inode);
 
         Ok(())
     }
@@ -583,6 +584,7 @@ impl Write for FileHandle {
         let bytes_written = file.write(buf)?;
 
         metadata.len = file.len().try_into().unwrap();
+        fs.storage.flush_mut(self.inode);
 
         Ok(bytes_written)
     }
@@ -850,7 +852,7 @@ impl fmt::Debug for FileHandle {
 
 /// The real file! It is simply a buffer of bytes with a cursor that
 /// represents a read/write position in the buffer.
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub(super) struct File {
     buffer: Vec<u8>,
     cursor: usize,

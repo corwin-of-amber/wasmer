@@ -9,6 +9,9 @@ use std::fmt;
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
+use js_sys::Uint8Array;
+use shared_slab::HookedSlab;
+
 /// The in-memory file system!
 ///
 /// It's a thin wrapper around [`FileSystemInner`]. This `FileSystem`
@@ -17,6 +20,12 @@ use std::sync::{Arc, RwLock};
 #[derive(Clone, Default)]
 pub struct FileSystem {
     pub(super) inner: Arc<RwLock<FileSystemInner>>,
+}
+
+impl FileSystem {
+    pub fn mount(&mut self, ui8a: Uint8Array) -> Result<()> {
+        self.inner.try_write().map_err(|_| FsError::Lock)?.storage.attach(ui8a)
+    }
 }
 
 impl crate::FileSystem for FileSystem {
@@ -216,7 +225,7 @@ impl crate::FileSystem for FileSystem {
                     Some(Node::Directory {
                         metadata: Metadata { modified, .. },
                         ..
-                    }) => *modified = time(),
+                    }) => { *modified = time(); fs.storage.flush_mut(inode_of_from_parent) },
                     _ => return Err(FsError::UnknownError),
                 }
             }
@@ -299,7 +308,7 @@ impl fmt::Debug for FileSystem {
 /// The core of the file system. It contains a collection of `Node`s,
 /// indexed by their respective `Inode` in a slab.
 pub(super) struct FileSystemInner {
-    pub(super) storage: Slab<Node>,
+    pub(super) storage: HookedSlab<Node>,
 }
 
 impl FileSystemInner {
@@ -436,6 +445,7 @@ impl FileSystemInner {
 
         node.set_name(new_name);
         node.metadata_mut().modified = time();
+        self.storage.flush_mut(inode);
 
         Ok(())
     }
@@ -456,6 +466,7 @@ impl FileSystemInner {
             }) => {
                 children.push(new_child);
                 *modified = time();
+                self.storage.flush_mut(inode);
 
                 Ok(())
             }
@@ -480,6 +491,7 @@ impl FileSystemInner {
             }) => {
                 children.remove(position);
                 *modified = time();
+                self.storage.flush_mut(inode);
 
                 Ok(())
             }
@@ -604,7 +616,7 @@ impl Default for FileSystemInner {
     fn default() -> Self {
         let time = time();
 
-        let mut slab = Slab::new();
+        let mut slab = HookedSlab::new();
         slab.insert(Node::Directory {
             inode: ROOT_INODE,
             name: OsString::from("/"),

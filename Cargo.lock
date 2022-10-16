@@ -3229,6 +3229,7 @@ dependencies = [
 name = "wasmer-vfs"
 version = "3.0.0-beta"
 dependencies = [
+ "js-sys",
  "libc",
  "serde",
  "slab",

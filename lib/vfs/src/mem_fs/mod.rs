@@ -2,6 +2,7 @@ mod file;
 mod file_opener;
 mod filesystem;
 mod stdio;
+mod shared_slab;
 
 use file::{File, FileHandle};
 pub use file_opener::FileOpener;
@@ -10,24 +11,61 @@ pub use stdio::{Stderr, Stdin, Stdout};
 
 use crate::Metadata;
 use std::ffi::{OsStr, OsString};
+use std::fmt::Formatter;
+
+use serde::{Serialize, Deserialize};
+use serde::de::Error;
 
 type Inode = usize;
 const ROOT_INODE: Inode = 0;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 enum Node {
     File {
         inode: Inode,
+        #[serde(serialize_with="serialize_osstring")]
+        #[serde(deserialize_with="deserialize_osstring")]
         name: OsString,
         file: File,
         metadata: Metadata,
     },
     Directory {
         inode: Inode,
+        #[serde(serialize_with="serialize_osstring")]
+        #[serde(deserialize_with="deserialize_osstring")]
         name: OsString,
         children: Vec<Inode>,
         metadata: Metadata,
     },
+}
+
+fn serialize_osstring<S>(s: &OsString, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+{
+    serializer.serialize_bytes(s.to_string_lossy().as_bytes())
+}
+
+struct OsStringVisitor;
+
+impl<'de> serde::de::Visitor<'de> for OsStringVisitor {
+    type Value = OsString;
+
+    fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+        formatter.write_str("OsString")
+    }
+
+    fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E> where E: Error {
+        let s = String::from_utf8_lossy(v).into_owned();
+        Ok(s.into())
+    }
+}
+
+fn deserialize_osstring<'de, D>(deserializer: D) -> Result<OsString, D::Error>
+    where
+        D: serde::Deserializer<'de>
+{
+    deserializer.deserialize_bytes(OsStringVisitor { })
 }
 
 impl Node {
