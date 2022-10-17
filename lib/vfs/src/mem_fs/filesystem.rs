@@ -9,7 +9,7 @@ use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
 use js_sys::ArrayBuffer;
-use shared_slab::HookedSlab;
+use shared_slab::SharedSlab;
 use crate::mem_fs::slab_adapter::SlabAdapter;
 
 /// The in-memory file system!
@@ -28,7 +28,7 @@ impl<Slab> Clone for FileSystem<Slab> where Slab: SlabAdapter<Node> {
     }
 }
 
-impl FileSystem<HookedSlab<Node>> {
+impl FileSystem<SharedSlab<Node>> {
     pub fn mount(&mut self, abuf: ArrayBuffer) -> Result<()> {
         self.inner.try_write().map_err(|_| FsError::Lock)?.storage.attach(abuf)
     }

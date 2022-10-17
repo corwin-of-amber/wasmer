@@ -1,23 +1,23 @@
-pub(crate) mod ui8a_ropes;
+pub(crate) mod ropes_abuf;
 
 use std::cell::UnsafeCell;
 use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use js_sys::ArrayBuffer;
 
-use ui8a_ropes::{Chunked, Ropes};
+use ropes_abuf::{Chunked, Ropes};
 use crate::{Result, FsError};
 use crate::mem_fs::slab_adapter::SlabAdapter;
 
 
 /**
- * A `HookedSlab` uses a backing `Ropes` storage to place nodes.
+ * A `SharedSlab` uses a backing `Ropes` storage to place nodes.
  * Data is serialized and deserialized when it is modified or accessed;
  * this allows sharing the `HookedSlab` with Web Workers by building
  * `Ropes` over a JavaScript `SharedArrayBuffer`.
  */
 // #[derive(Default, Clone)]  <- cannot! this will impose a constraint on T
-pub struct HookedSlab<T: Serialize + for <'de> Deserialize<'de>> {
+pub struct SharedSlab<T: Serialize + for <'de> Deserialize<'de>> {
     cache: UnsafeCell<HashMap<usize, VEntry<T>>>,
     ropes: Option<UnsafeCell<Ropes>>,
     next_key: usize
@@ -27,7 +27,7 @@ struct VEntry<T> {
     ver: u32, val: T
 }
 
-impl<T> HookedSlab<T> where T: Serialize + for <'de> Deserialize<'de> {
+impl<T> SharedSlab<T> where T: Serialize + for <'de> Deserialize<'de> {
     pub fn attach(&mut self, abuf: ArrayBuffer) -> Result<()> {
         t("attach");
         self.ropes = Some(UnsafeCell::new(
@@ -47,7 +47,7 @@ impl<T> HookedSlab<T> where T: Serialize + for <'de> Deserialize<'de> {
         //t(format!("pull({key})").as_str());
         if let Some(ropes) = self._ropes() {
             let ver = ropes.ver_peek(key);
-            if !HookedSlab::same_ver(self._cache().get(&key), ver) {
+            if !SharedSlab::same_ver(self._cache().get(&key), ver) {
                 t(format!("pull({key}): cache miss").as_str());
                 let data = ropes.get(key);
                 let bytes = &data[..];
@@ -75,18 +75,18 @@ impl<T> HookedSlab<T> where T: Serialize + for <'de> Deserialize<'de> {
     }
 }
 
-unsafe impl<T: Serialize + for <'de> Deserialize<'de>> Send for HookedSlab<T> { }
-unsafe impl<T: Serialize + for <'de> Deserialize<'de>> Sync for HookedSlab<T> { }
+unsafe impl<T: Serialize + for <'de> Deserialize<'de>> Send for SharedSlab<T> { }
+unsafe impl<T: Serialize + for <'de> Deserialize<'de>> Sync for SharedSlab<T> { }
 
 fn t(s: &str) {
     web_sys::console::log_2(&"[HookedSlab]".into(), &s.into());
 }
 
-impl<T: Serialize + for <'de> Deserialize<'de>> HookedSlab<T> {
+impl<T: Serialize + for <'de> Deserialize<'de>> SharedSlab<T> {
 
     pub fn new() -> Self {
         t("created");
-        HookedSlab {
+        SharedSlab {
             cache: UnsafeCell::new(HashMap::new()),
             ropes: None, next_key: 0
         }
@@ -132,20 +132,20 @@ impl<T: Serialize + for <'de> Deserialize<'de>> HookedSlab<T> {
     pub fn iter(&self) -> slab::Iter<'_, T> { t("iter"); todo!() }
 }
 
-impl<T> Default for HookedSlab<T> where T: Serialize + for <'de> Deserialize<'de> {
-    fn default() -> Self { HookedSlab::new() }
+impl<T> Default for SharedSlab<T> where T: Serialize + for <'de> Deserialize<'de> {
+    fn default() -> Self { SharedSlab::new() }
 }
 
-impl<T> SlabAdapter<T> for HookedSlab<T> where T: 'static + Serialize + for <'de> Deserialize<'de> {
-    fn new() -> Self { HookedSlab::new() }
+impl<T> SlabAdapter<T> for SharedSlab<T> where T: 'static + Serialize + for <'de> Deserialize<'de> {
+    fn new() -> Self { SharedSlab::new() }
 
-    fn get(&self, key: usize) -> Option<&T> { HookedSlab::get(self, key) }
-    fn get_mut(&mut self, key: usize) -> Option<&mut T> { HookedSlab::get_mut(self, key) }
+    fn get(&self, key: usize) -> Option<&T> { SharedSlab::get(self, key) }
+    fn get_mut(&mut self, key: usize) -> Option<&mut T> { SharedSlab::get_mut(self, key) }
 
-    fn flush_mut(&self, key: usize) { HookedSlab::flush_mut(self, key) }
+    fn flush_mut(&self, key: usize) { SharedSlab::flush_mut(self, key) }
 
-    fn insert(&mut self, val: T) -> usize { HookedSlab::insert(self, val) }
-    fn remove(&mut self, key: usize) -> T { HookedSlab::remove(self, key) }
+    fn insert(&mut self, val: T) -> usize { SharedSlab::insert(self, val) }
+    fn remove(&mut self, key: usize) -> T { SharedSlab::remove(self, key) }
 
     fn iter(&self) -> Box<dyn Iterator<Item = (usize, &'_ T)> + '_> { todo!() }
     fn vacant_entry_key(&mut self) -> usize { self.alloc_peek() }
