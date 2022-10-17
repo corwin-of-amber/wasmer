@@ -3,8 +3,7 @@ use std::ffi::OsString;
 use std::fmt;
 use std::io::{self, Read, Seek, Write};
 use std::path::{Path, PathBuf};
-use serde::Serialize;
-use serde_derive::Deserialize;
+use serde::{Serialize, Deserialize};
 use thiserror::Error;
 
 #[cfg(all(not(feature = "host-fs"), not(feature = "mem-fs")))]

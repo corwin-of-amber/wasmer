@@ -855,6 +855,7 @@ impl<Slab> fmt::Debug for FileHandle<Slab> where Slab: SlabAdapter<Node> {
 /// represents a read/write position in the buffer.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct File {
+    #[serde(with = "serde_bytes")]
     buffer: Vec<u8>,
     cursor: usize,
 }

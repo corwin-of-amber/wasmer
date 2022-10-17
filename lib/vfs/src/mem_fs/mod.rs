@@ -24,49 +24,52 @@ const ROOT_INODE: Inode = 0;
 pub enum Node {
     File {
         inode: Inode,
-        #[serde(serialize_with="serialize_osstring")]
-        #[serde(deserialize_with="deserialize_osstring")]
+        #[serde(with = "serde_osstring")]
         name: OsString,
         file: File,
         metadata: Metadata,
     },
     Directory {
         inode: Inode,
-        #[serde(serialize_with="serialize_osstring")]
-        #[serde(deserialize_with="deserialize_osstring")]
+        #[serde(with = "serde_osstring")]
         name: OsString,
         children: Vec<Inode>,
         metadata: Metadata,
     },
 }
 
-fn serialize_osstring<S>(s: &OsString, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-{
-    serializer.serialize_bytes(s.to_string_lossy().as_bytes())
-}
+/** An ad-hoc (non-portable) serialization of OsString as utf8 */
+struct serde_osstring;
 
-struct OsStringVisitor;
-
-impl<'de> serde::de::Visitor<'de> for OsStringVisitor {
-    type Value = OsString;
-
-    fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
-        formatter.write_str("OsString")
+impl serde_osstring {
+    pub fn serialize<S>(s: &OsString, serializer: S) -> Result<S::Ok, S::Error>
+        where
+            S: serde::Serializer,
+    {
+        serializer.serialize_bytes(s.to_string_lossy().as_bytes())
     }
 
-    fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E> where E: Error {
-        let s = String::from_utf8_lossy(v).into_owned();
-        Ok(s.into())
-    }
-}
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<OsString, D::Error>
+        where
+            D: serde::Deserializer<'de>
+    {
+        struct OsStringVisitor;
 
-fn deserialize_osstring<'de, D>(deserializer: D) -> Result<OsString, D::Error>
-    where
-        D: serde::Deserializer<'de>
-{
-    deserializer.deserialize_bytes(OsStringVisitor { })
+        impl<'de> serde::de::Visitor<'de> for OsStringVisitor {
+            type Value = OsString;
+
+            fn expecting(&self, formatter: &mut Formatter) -> std::fmt::Result {
+                formatter.write_str("OsString")
+            }
+
+            fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E> where E: Error {
+                let s = String::from_utf8_lossy(v).into_owned();
+                Ok(s.into())
+            }
+        }
+
+        deserializer.deserialize_bytes(OsStringVisitor {})
+    }
 }
 
 impl Node {
