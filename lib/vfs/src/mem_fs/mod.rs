@@ -39,6 +39,7 @@ pub enum Node {
 }
 
 /** An ad-hoc (non-portable) serialization of OsString as utf8 */
+#[allow(non_camel_case_types)]
 struct serde_osstring;
 
 impl serde_osstring {

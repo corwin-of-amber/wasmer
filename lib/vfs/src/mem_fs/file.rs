@@ -994,11 +994,9 @@ impl Write for File {
 
             // The cursor is somewhere in the buffer: not the happy path.
             position => {
-                self.buffer.reserve_exact(buf.len());
-
-                let mut remainder = self.buffer.split_off(position);
-                self.buffer.extend_from_slice(buf);
-                self.buffer.append(&mut remainder);
+                let to = position + buf.len();
+                if to > self.buffer.len() { self.buffer.resize(to, 0); }
+                self.buffer[position..position + buf.len()].copy_from_slice(&buf[..]);
             }
         }
 

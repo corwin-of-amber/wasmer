@@ -1,7 +1,7 @@
 pub(crate) mod ropes_abuf;
 
 use std::cell::UnsafeCell;
-use std::collections::HashMap;
+use std::collections::{hash_map, HashMap};
 use serde::{Deserialize, Serialize};
 use js_sys::ArrayBuffer;
 
@@ -75,6 +75,20 @@ impl<T> SharedSlab<T> where T: Serialize + for <'de> Deserialize<'de> {
     }
 }
 
+struct Iter<'a, T> { entries: hash_map::Iter<'a, usize, VEntry<T>> }
+
+impl<'a, T> Iter<'a, T> {
+    fn new(entries: hash_map::Iter<'a, usize, VEntry<T>>) -> Self { Iter { entries } }
+}
+
+impl<'a, T> Iterator for Iter<'a, T> {
+    type Item = (usize, &'a T);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        self.entries.next().map(|e| (*e.0, &e.1.val))
+    }
+}
+
 unsafe impl<T: Serialize + for <'de> Deserialize<'de>> Send for SharedSlab<T> { }
 unsafe impl<T: Serialize + for <'de> Deserialize<'de>> Sync for SharedSlab<T> { }
 
@@ -111,6 +125,7 @@ impl<T: Serialize + for <'de> Deserialize<'de>> SharedSlab<T> {
     }
 
     fn alloc(&mut self) -> usize {
+        /* @todo reuse deallocated elements! */
         let key = self._ropes().map(|e| e.alloc()).unwrap_or(self.next_key);
         self.next_key = key + 1;
         key
@@ -127,9 +142,19 @@ impl<T: Serialize + for <'de> Deserialize<'de>> SharedSlab<T> {
         self.flush_mut(key);
         key
     }
-    pub fn remove(&mut self, _key: usize) -> T { t("remove"); todo!() }
+    pub fn remove(&mut self, key: usize) -> T {
+        t(format!("remove{key}").as_str());
+        self._ropes().unwrap().remove(key);
+        self._cache().remove(&key).unwrap().val
+    }
 
-    pub fn iter(&self) -> slab::Iter<'_, T> { t("iter"); todo!() }
+    pub fn iter(&self) -> Box<dyn Iterator<Item = (usize, &'_ T)> + '_> {
+        t("iter");
+        // This only iterates cached entries. Is this ok?
+        // (`iter()` is only called from fs `unlink`, where it is used to find
+        //  the directory containing a file being removed so it can be updated)
+        Box::new(Iter::new(self._cache().iter()))
+    }
 }
 
 impl<T> Default for SharedSlab<T> where T: Serialize + for <'de> Deserialize<'de> {
@@ -147,6 +172,6 @@ impl<T> SlabAdapter<T> for SharedSlab<T> where T: 'static + Serialize + for <'de
     fn insert(&mut self, val: T) -> usize { SharedSlab::insert(self, val) }
     fn remove(&mut self, key: usize) -> T { SharedSlab::remove(self, key) }
 
-    fn iter(&self) -> Box<dyn Iterator<Item = (usize, &'_ T)> + '_> { todo!() }
+    fn iter(&self) -> Box<dyn Iterator<Item = (usize, &'_ T)> + '_> { SharedSlab::iter(self) }
     fn vacant_entry_key(&mut self) -> usize { self.alloc_peek() }
 }

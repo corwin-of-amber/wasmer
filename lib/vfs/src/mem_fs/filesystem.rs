@@ -526,10 +526,12 @@ impl<Slab> FileSystemInner<Slab> where Slab: SlabAdapter<Node> {
     pub(super) fn canonicalize_without_inode(&self, path: &Path) -> Result<PathBuf> {
         let mut components = path.components();
 
+        /* @todo it seems that in some cases (`ocamlc` calling `rename`) this path is *not*
+                 prefixed with a '/'.
         match components.next() {
             Some(Component::RootDir) => {}
             _ => return Err(FsError::InvalidInput),
-        }
+        }*/
 
         let mut new_path = PathBuf::with_capacity(path.as_os_str().len());
         new_path.push("/");
@@ -537,7 +539,7 @@ impl<Slab> FileSystemInner<Slab> where Slab: SlabAdapter<Node> {
         for component in components {
             match component {
                 // That's an error to get a `RootDir` a second time.
-                Component::RootDir => return Err(FsError::UnknownError),
+                Component::RootDir => (), // return Err(FsError::UnknownError),
 
                 // Nothing to do on `new_path`.
                 Component::CurDir => (),

@@ -110,23 +110,25 @@ impl Ropes {
         let mut offset = 0;
         let mut len = data.len();
         let mut cur = head;
+        let mut tail = 0;
         while len > 0 {
-            let nxt_ = self.storage.read_u32(cur, 0);
+            tail = self.storage.read_u32(cur, 0);
             let wr_len =
                 self.storage.write_bytes(cur, 4 * 1, &data[offset..]);
             offset += wr_len;
             len -= wr_len;
             let nxt =
-                if len > 0 { if nxt_ > 1 { nxt_ } else { self.alloc() as u32 } }
+                if len > 0 { if tail > 1 { tail } else { self.alloc() as u32 } }
                 else { 1 /* not 0 so that we don't mistake this for an empty block */ };
-            if nxt != nxt_ { self.storage.write_u32(cur, 0, nxt); }
+            if nxt != tail { self.storage.write_u32(cur, 0, nxt); }
             cur = nxt as usize;
         }
+        self.clear_chain(tail as usize);
         head
     }
 
-    /*
-     * recursive version that fails because of stack overflow:
+    /** ^
+     * @note recursive version that fails because of stack overflow:
 
     fn insert_cont(&mut self, maybe_at: u32, data: &[u8]) -> usize {
         let key = if maybe_at > 1 { maybe_at as usize } else { self.alloc() };
@@ -169,5 +171,18 @@ impl Ropes {
         }
         assert!(offset == vec.len()); // fully initialized!
         vec
+    }
+
+    pub fn remove(&mut self, key: usize) {
+        self.clear_chain(key)
+    }
+
+    fn clear_chain(&mut self, at: usize) {
+        let mut cur = at;
+        while cur > 1 {
+            let nxt = self.storage.read_u32(cur, 0);
+            self.storage.write_u32(cur, 0, 0);
+            cur = nxt as usize;
+        }
     }
 }
