@@ -14,7 +14,7 @@ use crate::{
 
 #[derive(Debug, Default, Clone)]
 pub struct TmpFileSystem {
-    fs: mem_fs::FileSystem,
+    pub fs: mem_fs::FileSystem,
 }
 
 impl TmpFileSystem {

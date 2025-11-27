@@ -314,6 +314,132 @@ impl WasiRunner {
 
         Ok(())
     }
+
+    #[tracing::instrument(skip_all)]
+    pub async fn run_command_nb(
+        &mut self,
+        command_name: &str,
+        pkg: &BinaryPackage,
+        runtime: Arc<dyn Runtime + Send + Sync>,
+    ) -> Result<crate::os::task::TaskJoinHandle, Error> {
+        let cmd = pkg
+            .get_command(command_name)
+            .with_context(|| format!("The package doesn't contain a \"{command_name}\" command"))?;
+        let wasi = cmd
+            .metadata()
+            .annotation("wasi")?
+            .unwrap_or_else(|| Wasi::new(command_name));
+
+        let exec_name = if let Some(exec_name) = wasi.exec_name.as_ref() {
+            exec_name
+        } else {
+            command_name
+        };
+
+        #[allow(unused_mut)]
+        let mut env = self
+            .prepare_webc_env(exec_name, &wasi, Some(pkg), Arc::clone(&runtime), None)
+            .context("Unable to prepare the WASI environment")?;
+
+        #[cfg(feature = "journal")]
+        {
+            for journal in self.wasi.journals.clone() {
+                env.add_journal(journal);
+            }
+
+            for snapshot_trigger in self.wasi.snapshot_on.iter().cloned() {
+                env.add_snapshot_trigger(snapshot_trigger);
+            }
+        }
+
+        if let Some(cwd) = wasi.cwd.as_ref().or(self.wasi.current_dir.as_ref()) {
+            env.set_current_dir(cwd);
+        }
+
+        let env = env.build()?;
+
+        let command_name = command_name.to_string();
+        let tasks = runtime.task_manager().clone();
+        let pkg = pkg.clone();
+
+        let store = runtime.new_store();
+
+        let task_handle =
+            crate::bin_factory::spawn_exec(pkg, &command_name, store, env, &runtime).await?;
+
+        Ok(task_handle)
+
+        /*
+        let exit_code = tasks.spawn_await(
+            move || {
+                let mut task_handle =
+                    crate::bin_factory::spawn_exec(pkg, &command_name, store, env, &runtime)
+                        .await
+                        .context("Spawn failed")?;
+
+                #[cfg(feature = "ctrlc")]
+                task_handle.install_ctrlc_handler();
+
+                task_handle
+                    .wait_finished()
+                    .await
+                    .map_err(|err| {
+                        // We do our best to recover the error
+                        let msg = err.to_string();
+                        let weak = Arc::downgrade(&err);
+                        Arc::into_inner(err).unwrap_or_else(|| {
+                            weak.upgrade()
+                                .map(|err| match err.as_ref() {
+                                    WasiRuntimeError::Init(a) => WasiRuntimeError::Init(a.clone()),
+                                    WasiRuntimeError::Export(a) => {
+                                        WasiRuntimeError::Export(a.clone())
+                                    }
+                                    WasiRuntimeError::Instantiation(a) => {
+                                        WasiRuntimeError::Instantiation(a.clone())
+                                    }
+                                    WasiRuntimeError::Wasi(WasiError::Exit(a)) => {
+                                        WasiRuntimeError::Wasi(WasiError::Exit(*a))
+                                    }
+                                    WasiRuntimeError::Wasi(WasiError::UnknownWasiVersion) => {
+                                        WasiRuntimeError::Wasi(WasiError::UnknownWasiVersion)
+                                    }
+                                    WasiRuntimeError::Wasi(WasiError::DeepSleep(_)) => {
+                                        WasiRuntimeError::Anyhow(Arc::new(anyhow::format_err!(
+                                            "deep-sleep"
+                                        )))
+                                    }
+                                    WasiRuntimeError::ControlPlane(a) => {
+                                        WasiRuntimeError::ControlPlane(a.clone())
+                                    }
+                                    WasiRuntimeError::Runtime(a) => {
+                                        WasiRuntimeError::Runtime(a.clone())
+                                    }
+                                    WasiRuntimeError::Thread(a) => {
+                                        WasiRuntimeError::Thread(a.clone())
+                                    }
+                                    WasiRuntimeError::Anyhow(a) => {
+                                        WasiRuntimeError::Anyhow(a.clone())
+                                    }
+                                })
+                                .unwrap_or_else(|| {
+                                    WasiRuntimeError::Anyhow(Arc::new(anyhow::format_err!(
+                                        "{}", msg
+                                    )))
+                                })
+                        })
+                    })
+                    .context("Unable to wait for the process to exit")
+            }
+                .in_current_span(),
+        )??;
+
+        if exit_code.raw() == 0 {
+            Ok(())
+        } else {
+            Err(WasiRuntimeError::Wasi(crate::WasiError::Exit(exit_code)).into())
+        }
+         */
+    }
 }
 
 impl crate::runners::Runner for WasiRunner {

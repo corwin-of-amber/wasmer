@@ -71,6 +71,10 @@ impl CommonWasiOptions {
             builder.add_map_dir(".", "/")?;
         }
 
+        if let Some(cwd) = &self.current_dir {
+            builder.set_current_dir(cwd);
+        }
+
         builder.set_fs(Box::new(fs));
 
         for pkg in &self.injected_packages {

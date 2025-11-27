@@ -143,6 +143,14 @@ impl Module {
         }
 
         let imports_object = js_sys::Object::new();
+
+        let js_init_hook =
+            js_sys::Reflect::get(&js_sys::global(), &JsValue::from("init_hook")).unwrap();
+        if js_init_hook.is_function() {
+            js_sys::Function::call1(&js_init_hook.into(), &js_sys::Object::new(), &imports_object)
+                .map_err(|e: JsValue| -> RuntimeError { e.into() })?;
+        }
+
         let mut import_externs: Vec<Extern> = vec![];
         for import_type in self.imports() {
             let resolved_import = imports.get_export(import_type.module(), import_type.name());
@@ -160,39 +168,34 @@ impl Module {
                     );
                 }
             }
+            let import = resolved_import.unwrap_or_else(|| {
+                warn!(
+                    "import not found {}:{}",
+                    import_type.module(),
+                    import_type.name()
+                );
+                crate::Function::new_typed(store, || 0).into()  // assume function stub (?)
+            });
             // Annotation is here to prevent spurious IDE warnings.
             #[allow(unused_unsafe)]
             unsafe {
-                if let Some(import) = resolved_import {
-                    let val = js_sys::Reflect::get(&imports_object, &import_type.module().into())?;
-                    if !val.is_undefined() {
-                        // If the namespace is already set
-                        js_sys::Reflect::set(
-                            &val,
-                            &import_type.name().into(),
-                            &import.as_jsvalue(&store.as_store_ref()),
-                        )?;
-                    } else {
-                        // If the namespace doesn't exist
-                        let import_namespace = js_sys::Object::new();
-                        js_sys::Reflect::set(
-                            &import_namespace,
-                            &import_type.name().into(),
-                            &import.as_jsvalue(&store.as_store_ref()),
-                        )?;
-                        js_sys::Reflect::set(
-                            &imports_object,
-                            &import_type.module().into(),
-                            &import_namespace.into(),
-                        )?;
-                    }
-                    import_externs.push(import);
-                } else {
-                    warn!(
-                        "import not found {}:{}",
-                        import_type.module(),
-                        import_type.name()
-                    );
+                let val = js_sys::Reflect::get(&imports_object, &import_type.module().into())?;
+                let ns = if !val.is_undefined() { val } else {
+                    let import_namespace = js_sys::Object::new();
+                    js_sys::Reflect::set(
+                        &imports_object,
+                        &import_type.module().into(),
+                        &import_namespace.clone().into(),
+                    )?;
+                    import_namespace.into()
+                };
+                if !js_sys::Reflect::has(&ns, &import_type.name().into())? {
+                    js_sys::Reflect::set(
+                        &ns,
+                        &import_type.name().into(),
+                        &import.as_jsvalue(&store.as_store_ref()),
+                    )?;
+                    import_externs.push(import);  // is this needed?
                 }
             }
             // in case the import is not found, the JS Wasm VM will handle

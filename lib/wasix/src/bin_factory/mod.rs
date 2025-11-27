@@ -134,7 +134,7 @@ impl BinFactory {
         } else if self.commands.exists(name.as_str()) {
             tracing::warn!("builtin command without a parent ctx - {}", name);
         }
-        Err(SpawnError::BinaryNotFound { binary: name })
+        Err(SpawnError::NotFound { message: name })
     }
 
     // TODO: remove allow once BinFactory is refactored

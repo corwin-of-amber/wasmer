@@ -155,7 +155,7 @@ pub trait VirtualTaskManager: std::fmt::Debug + Send + Sync + 'static {
     ) -> Result<Option<Memory>, WasiThreadError> {
         match spawn_type {
             SpawnMemoryType::CreateMemoryOfType(mut ty) => {
-                ty.shared = true;
+                //ty.shared = true;
 
                 // Note: If memory is shared, maximum needs to be set in the
                 // browser otherwise creation will fail.
