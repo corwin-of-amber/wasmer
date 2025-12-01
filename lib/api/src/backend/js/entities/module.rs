@@ -150,6 +150,16 @@ impl Module {
         }
 
         let imports_object = js_sys::Object::new();
+
+        let js_init_hook =
+            js_sys::Reflect::get(&js_sys::global(), &JsValue::from("init_hook")).unwrap();
+        let js_init_pod =
+            if js_init_hook.is_function() {
+                js_sys::Function::call1(&js_init_hook.into(), &js_sys::Object::new(), &imports_object)
+                    .map_err(|e: JsValue| -> RuntimeError { e.into() })?
+            }
+            else { JsValue::undefined() };
+
         let mut import_externs: Vec<Extern> = vec![];
         for import_type in self.imports() {
             let resolved_import = imports.get_export(import_type.module(), import_type.name());
@@ -205,8 +215,14 @@ impl Module {
             // in case the import is not found, the JS Wasm VM will handle
             // the error for us, so we don't need to handle it
         }
-        Ok(WebAssembly::Instance::new(&self.module, &imports_object)
-            .map_err(|e: JsValue| -> RuntimeError { e.into() })?)
+
+        let instance = WebAssembly::Instance::new(&self.module, &imports_object)
+            .map_err(|e: JsValue| -> RuntimeError { e.into() })?;
+        if js_init_pod.is_object() {
+            js_sys::Reflect::set(
+                &js_init_pod, &"instance".into(), &instance.clone());
+        }
+        Ok(instance)
     }
 
     pub fn name(&self) -> Option<&str> {
@@ -426,7 +442,7 @@ impl Module {
                             let table_type = TableType::new(Type::FuncRef, 1, None);
                             ExternType::Table(table_type)
                         }
-                        _ => unimplemented!(),
+                        other => unimplemented!("export kind '{}'", other),
                     }
                 };
                 ExportType::new(&field, extern_type)
