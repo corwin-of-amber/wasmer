@@ -91,7 +91,7 @@ impl Module {
 
         // The module is now validated, so we can safely parse it's types
         #[cfg(feature = "wasm-types-polyfill")]
-        let (type_hints, name) = {
+        let (type_hints, name) = if binary.len() > 0 {
             let info = crate::polyfill::translate_module(&binary[..]).unwrap();
 
             (
@@ -109,7 +109,7 @@ impl Module {
                 }),
                 info.info.name,
             )
-        };
+        } else { (None, None) };
         #[cfg(not(feature = "wasm-types-polyfill"))]
         let (type_hints, name) = (None, None);
 
@@ -155,8 +155,12 @@ impl Module {
             js_sys::Reflect::get(&js_sys::global(), &JsValue::from("init_hook")).unwrap();
         let js_init_pod =
             if js_init_hook.is_function() {
-                js_sys::Function::call1(&js_init_hook.into(), &js_sys::Object::new(), &imports_object)
-                    .map_err(|e: JsValue| -> RuntimeError { e.into() })?
+                js_sys::Function::call2(&js_init_hook.into(), &JsValue::undefined(),
+                                        &imports_object, &self.module)
+                    .unwrap_or_else(|e: JsValue| {
+                        web_sys::console::error_2(&"in init_hook:".into(), &e);
+                        JsValue::undefined()
+                    })
             }
             else { JsValue::undefined() };
 
@@ -325,6 +329,7 @@ impl Module {
                         .type_hints
                         .as_ref()
                         .map(|hints| hints.imports.get(i).unwrap().clone());
+
                     let extern_type = if let Some(hint) = type_hint {
                         hint
                     } else {
@@ -442,7 +447,14 @@ impl Module {
                             let table_type = TableType::new(Type::FuncRef, 1, None);
                             ExternType::Table(table_type)
                         }
-                        other => unimplemented!("export kind '{}'", other),
+                        "tag" => {
+                            let func_type = FunctionType::new(vec![], vec![]);
+                            ExternType::Tag(wasmer_types::TagType::from_fn_type(
+                                wasmer_types::TagKind::Exception,
+                                func_type,
+                            ))
+                        }
+                        other => unimplemented!("export kind '{}'", other)
                     }
                 };
                 ExportType::new(&field, extern_type)

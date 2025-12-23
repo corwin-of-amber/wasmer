@@ -223,6 +223,9 @@ impl Function {
                     &wasm_bindgen::JsValue::NULL,
                     &arr,
                 );
+                if let Err(e) = &r {
+                    web_sys::console::warn_1(&e.clone().into());
+                }
                 let store_mut = store.as_store_mut();
                 if let Some(callback) = store_mut.inner.on_called.take() {
                     match callback(store_mut) {

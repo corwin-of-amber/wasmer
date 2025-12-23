@@ -1155,7 +1155,7 @@ where
     {
         asyncify_start_unwind.call(&mut ctx, asyncify_data);
     } else {
-        warn!("failed to unwind the stack because the asyncify_start_rewind export is missing");
+        warn!("failed to unwind the stack because the asyncify_start_unwind export is missing");
         return Err(WasiError::Exit(Errno::Noexec.into()));
     }
 
@@ -1221,7 +1221,7 @@ where
         {
             asyncify_stop_unwind.call(&mut ctx);
         } else {
-            warn!("failed to unwind the stack because the asyncify_start_rewind export is missing");
+            warn!("failed to unwind the stack because the asyncify_stop_unwind export is missing");
             return Ok(OnCalledAction::Finish);
         }
 
