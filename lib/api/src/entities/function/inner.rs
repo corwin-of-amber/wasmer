@@ -608,7 +608,6 @@ impl BackendFunction {
             let given = Rets::wasm_types();
 
             if expected != given {
-                // todo: error result types don't match
                 return Err(RuntimeError::new(format!(
                     "given types (`{given:?}`) for the function results don't match the actual types (`{expected:?}`)",
                 )));
