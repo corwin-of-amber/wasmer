@@ -80,13 +80,15 @@ impl FileHandle {
             let inode = fs.storage.get(self.inode);
             match inode {
                 Some(Node::ArcFile(node)) => {
+                    let (n_fs, n_path) = (node.fs.clone(), node.path.clone());
+                    drop(fs);
                     self.arc_file.replace(
-                        node.fs
+                        n_fs
                             .new_open_options()
                             .read(self.readable)
                             .write(self.writable)
                             .append(self.append_mode)
-                            .open(node.path.as_path()),
+                            .open(n_path.as_path()),
                     );
                 }
                 _ => return Err(FsError::EntryNotFound),
@@ -182,16 +184,19 @@ impl VirtualFile for FileHandle {
             }
             Some(Node::ArcFile(node)) => match self.arc_file.as_ref() {
                 Some(file) => file.as_ref().map(|file| file.size()).unwrap_or(0),
-                None => node
-                    .fs
-                    .new_open_options()
-                    .read(self.readable)
-                    .write(self.writable)
-                    .append(self.append_mode)
-                    .open(node.path.as_path())
-                    .map(|file| file.size())
-                    .unwrap_or(0),
-            },
+                None => {
+                    let (n_fs, n_path) = (node.fs.clone(), node.path.clone());
+                    drop(fs);
+
+                    n_fs
+                        .new_open_options()
+                        .read(self.readable)
+                        .write(self.writable)
+                        .append(self.append_mode)
+                        .open(n_path.as_path())
+                        .map(|file| file.size()).unwrap_or(0)
+                }
+            }
             _ => 0,
         }
     }
@@ -1487,9 +1492,13 @@ impl File {
 
 impl File {
     pub fn read(&self, buf: &mut [u8], cursor: &mut u64) -> io::Result<usize> {
+        Self::read_inner(&self.buffer[..], buf, cursor)
+    }
+
+    pub fn read_inner(file: &[u8], buf: &mut [u8], cursor: &mut u64) -> io::Result<usize> {
         let cur_pos = *cursor as usize;
-        let max_to_read = cmp::min(self.buffer.len() - cur_pos, buf.len());
-        let data_to_copy = &self.buffer[cur_pos..][..max_to_read];
+        let max_to_read = cmp::min(file.len() - cur_pos, buf.len());
+        let data_to_copy = &file[cur_pos..][..max_to_read];
 
         // SAFETY: `buf[..max_to_read]` and `data_to_copy` have the same size, due to
         // how `max_to_read` is computed.
@@ -1503,6 +1512,10 @@ impl File {
 
 impl File {
     pub fn seek(&self, position: io::SeekFrom, cursor: &mut u64) -> io::Result<u64> {
+        Self::seek_inner(position, cursor, self.buffer.len())
+    }
+
+    pub fn seek_inner(position: io::SeekFrom, cursor: &mut u64, size: usize) -> io::Result<u64> {
         let to_err = |_| io::ErrorKind::InvalidInput;
 
         // Calculate the next cursor.
@@ -1512,7 +1525,7 @@ impl File {
 
             // Calculate from the end, so `buffer.len() + offset`.
             io::SeekFrom::End(offset) => {
-                TryInto::<i64>::try_into(self.buffer.len()).map_err(to_err)? + offset
+                TryInto::<i64>::try_into(size).map_err(to_err)? + offset
             }
 
             // Calculate from the current cursor, so `cursor + offset`.
@@ -1532,7 +1545,7 @@ impl File {
         // In this implementation, it's an error to seek beyond the
         // end of the buffer.
         let next_cursor = next_cursor.try_into().map_err(to_err)?;
-        *cursor = cmp::min(self.buffer.len() as u64, next_cursor);
+        *cursor = cmp::min(size as u64, next_cursor);
 
         let cursor = *cursor;
         Ok(cursor)
@@ -1581,26 +1594,13 @@ impl ReadOnlyFile {
 
 impl ReadOnlyFile {
     pub fn read(&self, buf: &mut [u8], cursor: &mut u64) -> io::Result<usize> {
-        let cur_pos = *cursor as usize;
-        let max_to_read = cmp::min(self.buffer.len() - cur_pos, buf.len());
-        let data_to_copy = &self.buffer[cur_pos..][..max_to_read];
-
-        // SAFETY: `buf[..max_to_read]` and `data_to_copy` have the same size, due to
-        // how `max_to_read` is computed.
-        buf[..max_to_read].copy_from_slice(data_to_copy);
-
-        *cursor += max_to_read as u64;
-
-        Ok(max_to_read)
+        File::read_inner(&self.buffer[..], buf, cursor)
     }
 }
 
 impl ReadOnlyFile {
-    pub fn seek(&self, _position: io::SeekFrom, _cursor: &mut u64) -> io::Result<u64> {
-        Err(io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            "file is read-only",
-        ))
+    pub fn seek(&self, position: io::SeekFrom, cursor: &mut u64) -> io::Result<u64> {
+        File::seek_inner(position, cursor, self.buffer.len())
     }
 }
 

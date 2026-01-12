@@ -92,9 +92,6 @@ impl FileSystem {
 
             // The file doesn't already exist; it's OK to create it if
             None => {
-                // Write lock.
-                let mut fs_lock = self.inner.write().map_err(|_| FsError::Lock)?;
-
                 // Read the metadata or generate a dummy one
                 let meta = match fs.metadata(&target_path) {
                     Ok(meta) => meta,
@@ -112,6 +109,9 @@ impl FileSystem {
                         }
                     }
                 };
+
+                // Write lock. (strictly speaking, best be taken before metadata call
+                let mut fs_lock = self.inner.write().map_err(|_| FsError::Lock)?;
 
                 // Creating the file in the storage.
                 let inode_of_file = fs_lock.storage.vacant_entry().key();
@@ -187,7 +187,7 @@ impl FileSystem {
                             let time = time();
                             Metadata {
                                 ft: FileType {
-                                    file: true,
+                                    dir: true,
                                     ..Default::default()
                                 },
                                 accessed: time,
@@ -446,11 +446,16 @@ impl crate::FileOpener for FileSystem {
                     }
 
                     Some(Node::ArcFile(node)) => {
-                        // Update the accessed time.
+                        // Update the accessed time (and len if it is to be truncated)
                         node.metadata.accessed = time();
+                        if truncate {
+                            node.metadata.len = 0;
+                        }
 
-                        let mut file = node
-                            .fs
+                        let (n_fs, n_path) = (node.fs.clone(), node.path.clone());
+                        drop(fs);
+
+                        let mut file = n_fs
                             .new_open_options()
                             .read(read)
                             .write(write)
@@ -458,12 +463,11 @@ impl crate::FileOpener for FileSystem {
                             .truncate(truncate)
                             .create(create)
                             .create_new(create_new)
-                            .open(node.path.as_path())?;
+                            .open(n_path)?;
 
                         // Truncate if needed.
                         if truncate {
                             file.set_len(0)?;
-                            node.metadata.len = 0;
                         }
 
                         // Move the cursor to the end if needed.
