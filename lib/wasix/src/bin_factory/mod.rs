@@ -54,6 +54,7 @@ impl BinFactory {
         cache.insert(name.to_string(), Some(binary));
     }
 
+    /*
     #[allow(clippy::await_holding_lock)]
     pub async fn get_binary(
         &self,
@@ -67,11 +68,12 @@ impl BinFactory {
                 Executable::BinaryPackage(pkg) => Some(pkg),
             })
     }
+    */
 
     pub fn spawn<'a>(
         &'a self,
         name: String,
-        env: WasiEnv,
+        mut env: WasiEnv,
     ) -> Pin<Box<dyn Future<Output = Result<TaskJoinHandle, SpawnError>> + 'a>> {
         Box::pin(async move {
             // Find the binary (or die trying) and make the spawn type
@@ -81,7 +83,14 @@ impl BinFactory {
                 .ok_or_else(|| SpawnError::BinaryNotFound {
                     binary: name.clone(),
                 });
-            let executable = res?;
+            let (executable, mut pre_args) = res?;
+
+            if !pre_args.is_empty() {
+                let mut state = env.state.fork();
+                pre_args.push(name.clone());  // replace argv[0] with full path
+                state.args.get_mut().unwrap().splice(0..1, pre_args.drain(..));
+                env.state = Arc::new(state);
+            }
 
             // Execute
             match executable {
@@ -125,7 +134,7 @@ impl BinFactory {
         &self,
         name: &str,
         fs: Option<&dyn FileSystem>,
-    ) -> Option<Executable> {
+    ) -> Option<(Executable, Vec<String>)> {
         let name = name.to_string();
 
         // Fast path
@@ -141,19 +150,19 @@ impl BinFactory {
 
         // Check the cache
         if let Some(data) = cache.get(&name) {
-            return data.clone().map(Executable::BinaryPackage);
+            return data.clone().map(|pkg| (Executable::BinaryPackage(pkg), vec![]));
         }
 
         // Check the filesystem for the file
         if name.starts_with('/') {
             if let Some(fs) = fs {
                 match load_executable_from_filesystem(fs, name.as_ref(), self.runtime()).await {
-                    Ok(executable) => {
+                    Ok((executable, pre_args)) => {
                         if let Executable::BinaryPackage(pkg) = &executable {
                             cache.insert(name, Some(pkg.clone()));
                         }
 
-                        return Some(executable);
+                        return Some((executable, pre_args));
                     }
                     Err(e) => {
                         tracing::warn!(
@@ -181,7 +190,7 @@ async fn load_executable_from_filesystem(
     fs: &dyn FileSystem,
     path: &Path,
     rt: &(dyn Runtime + Send + Sync),
-) -> Result<Executable, anyhow::Error> {
+) -> Result<(Executable, Vec<String>), anyhow::Error> {
     let mut f = fs
         .new_open_options()
         .read(true)
@@ -190,7 +199,7 @@ async fn load_executable_from_filesystem(
 
     // Fast path if the file is fully available in memory.
     // Prevents redundant copying of the file data.
-    if let Some(buf) = f.as_owned_buffer() {
+    /*if let Some(buf) = f.as_owned_buffer() {
         if wasmer_package::utils::is_container(buf.as_slice()) {
             let bytes = buf.clone().into_bytes();
             if let Ok(container) = from_bytes(bytes.clone()) {
@@ -203,20 +212,43 @@ async fn load_executable_from_filesystem(
         }
 
         Ok(Executable::Wasm(buf))
-    } else {
+    } else {*/
         let mut data = Vec::with_capacity(f.size() as usize);
         f.read_to_end(&mut data).await.context("Read failed")?;
 
         let bytes: bytes::Bytes = data.into();
 
-        if let Ok(container) = from_bytes(bytes.clone()) {
+        if let Some((exec, pre_args)) = Box::pin(shebang(fs, &bytes[..], rt)).await? {
+            Ok((exec, pre_args))
+        }
+        else if let Ok(container) = from_bytes(bytes.clone()) {
             let pkg = BinaryPackage::from_webc(&container, rt)
                 .await
                 .context("Unable to load the package")?;
 
-            Ok(Executable::BinaryPackage(pkg))
+            Ok((Executable::BinaryPackage(pkg), vec![]))
         } else {
-            Ok(Executable::Wasm(OwnedBuffer::from_bytes(bytes)))
+            Ok((Executable::Wasm(OwnedBuffer::from_bytes(bytes)), vec![]))
         }
+    //}
+}
+
+async fn shebang(fs: &dyn FileSystem, bytes: &[u8], rt: &(dyn Runtime + Send + Sync)) -> Result<Option<(Executable, Vec<String>)>, anyhow::Error> {
+    let pfx = &bytes[0..2];
+    if pfx == ['#', '!'].map(|c| c as u8) {
+        if let Some(eol) = bytes.iter().position(|&x| x == b'\n') {
+            web_sys::console::warn_1(&"found shebang prefix".into());
+            let interp = String::from_utf8_lossy(&bytes[2..eol]).into_owned();
+            web_sys::console::log_1(&format!("interp = {interp}").into());
+
+
+            let (exe, mut pre_args) = load_executable_from_filesystem(fs, interp.as_ref(), rt).await?;
+            pre_args.insert(0, interp);
+            Ok(Some((exe, pre_args)))
+        }
+        else { Ok(None) }
+    }
+    else {
+        Ok(None)
     }
 }
