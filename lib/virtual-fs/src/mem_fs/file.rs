@@ -299,15 +299,18 @@ impl VirtualFile for FileHandle {
                     .as_ref()
                     .map(|file| file.get_special_fd())
                     .unwrap_or(None),
-                None => node
-                    .fs
-                    .new_open_options()
-                    .read(self.readable)
-                    .write(self.writable)
-                    .append(self.append_mode)
-                    .open(node.path.as_path())
-                    .map(|file| file.get_special_fd())
-                    .unwrap_or(None),
+                None => {
+                    let (n_fs, n_path) = (node.fs.clone(), node.path.clone());
+                    drop(fs);
+                    n_fs
+                        .new_open_options()
+                        .read(self.readable)
+                        .write(self.writable)
+                        .append(self.append_mode)
+                        .open(n_path.as_path())
+                        .map(|file| file.get_special_fd())
+                        .unwrap_or(None)
+                }
             },
             _ => None,
         }
