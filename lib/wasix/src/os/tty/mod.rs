@@ -243,6 +243,10 @@ impl Tty {
         })
     }
 
+    fn on_ctrl_d(self, _data: Cow<'static, [u8]>) -> BoxFuture<'static, Self> {
+        Box::pin(async move { self })
+    }
+
     fn on_backspace(mut self, _data: Cow<'static, [u8]>) -> BoxFuture<'static, Self> {
         // Remove a character (if there are none left we are done)
         if self.line.is_empty() {
@@ -362,6 +366,7 @@ impl Tty {
             return match String::from_utf8_lossy(data.as_ref()).as_ref() {
                 "\r" | "\u{000A}" => self.on_enter(data),
                 "\u{0003}" => self.on_ctrl_c(data),
+                "\u{0004}" => self.on_ctrl_d(data),
                 "\u{007F}" => self.on_backspace(data),
                 "\u{0009}" => self.on_tab(data),
                 "\u{001B}\u{005B}\u{0044}" => self.on_cursor_left(data),

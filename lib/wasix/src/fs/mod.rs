@@ -1561,7 +1561,11 @@ impl WasiFs {
     #[allow(clippy::await_holding_lock)]
     pub async fn flush(&self, fd: WasiFd) -> Result<(), Errno> {
         match fd {
-            __WASI_STDIN_FILENO => (),
+            __WASI_STDIN_FILENO => {
+                let mut file =
+                    WasiInodes::stdin_mut(&self.fd_map).map_err(fs_error_into_wasi_err)?;
+                file.flush().await.map_err(map_io_err)?
+            },
             __WASI_STDOUT_FILENO => {
                 let mut file =
                     WasiInodes::stdout_mut(&self.fd_map).map_err(fs_error_into_wasi_err)?;
