@@ -1469,65 +1469,35 @@ impl WasiFs {
     }
 
     pub fn fdstat(&self, fd: WasiFd) -> Result<Fdstat, Errno> {
-        match fd {
-            __WASI_STDIN_FILENO => {
-                return Ok(Fdstat {
-                    fs_filetype: Filetype::CharacterDevice,
-                    fs_flags: Fdflags::empty(),
-                    fs_rights_base: STDIN_DEFAULT_RIGHTS,
-                    fs_rights_inheriting: Rights::empty(),
-                })
-            }
-            __WASI_STDOUT_FILENO => {
-                return Ok(Fdstat {
-                    fs_filetype: Filetype::CharacterDevice,
-                    fs_flags: Fdflags::APPEND,
-                    fs_rights_base: STDOUT_DEFAULT_RIGHTS,
-                    fs_rights_inheriting: Rights::empty(),
-                })
-            }
-            __WASI_STDERR_FILENO => {
-                return Ok(Fdstat {
-                    fs_filetype: Filetype::CharacterDevice,
-                    fs_flags: Fdflags::APPEND,
-                    fs_rights_base: STDERR_DEFAULT_RIGHTS,
-                    fs_rights_inheriting: Rights::empty(),
-                })
-            }
-            VIRTUAL_ROOT_FD => {
-                return Ok(Fdstat {
-                    fs_filetype: Filetype::Directory,
-                    fs_flags: Fdflags::empty(),
-                    // TODO: fix this
-                    fs_rights_base: ALL_RIGHTS,
-                    fs_rights_inheriting: ALL_RIGHTS,
-                });
-            }
-            _ => (),
-        }
         let fd = self.get_fd(fd)?;
 
-        let guard = fd.inode.read();
-        let deref = guard.deref();
-        Ok(Fdstat {
-            fs_filetype: match deref {
-                Kind::File { .. } => Filetype::RegularFile,
-                Kind::Dir { .. } => Filetype::Directory,
-                Kind::Symlink { .. } => Filetype::SymbolicLink,
-                Kind::Socket { socket } => match &socket.inner.protected.read().unwrap().kind {
-                    InodeSocketKind::TcpStream { .. } => Filetype::SocketStream,
-                    InodeSocketKind::Raw { .. } => Filetype::SocketRaw,
-                    InodeSocketKind::PreSocket { props, .. } => match props.ty {
-                        Socktype::Stream => Filetype::SocketStream,
-                        Socktype::Dgram => Filetype::SocketDgram,
-                        Socktype::Raw => Filetype::SocketRaw,
-                        Socktype::Seqpacket => Filetype::SocketSeqpacket,
+        let filetype =
+            if [FS_STDIN_INO, FS_STDOUT_INO, FS_STDERR_INO].contains(&fd.inode.ino()) {
+                Filetype::CharacterDevice
+            }
+            else {
+                match fd.inode.read().deref() {
+                    Kind::File { .. } => Filetype::RegularFile,
+                    Kind::Dir { .. } => Filetype::Directory,
+                    Kind::Symlink { .. } => Filetype::SymbolicLink,
+                    Kind::Socket { socket } => match &socket.inner.protected.read().unwrap().kind {
+                        InodeSocketKind::TcpStream { .. } => Filetype::SocketStream,
+                        InodeSocketKind::Raw { .. } => Filetype::SocketRaw,
+                        InodeSocketKind::PreSocket { props, .. } => match props.ty {
+                            Socktype::Stream => Filetype::SocketStream,
+                            Socktype::Dgram => Filetype::SocketDgram,
+                            Socktype::Raw => Filetype::SocketRaw,
+                            Socktype::Seqpacket => Filetype::SocketSeqpacket,
+                            _ => Filetype::Unknown,
+                        },
                         _ => Filetype::Unknown,
                     },
                     _ => Filetype::Unknown,
-                },
-                _ => Filetype::Unknown,
-            },
+                }
+            };
+
+        Ok(Fdstat {
+            fs_filetype: filetype,
             fs_flags: fd.inner.flags,
             fs_rights_base: fd.inner.rights,
             fs_rights_inheriting: fd.inner.rights_inheriting, // TODO(lachlan): Is this right?
