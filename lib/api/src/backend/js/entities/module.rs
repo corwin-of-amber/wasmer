@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use bytes::Bytes;
-use js_sys::{Reflect, Uint8Array, WebAssembly};
+use js_sys::{Object, Reflect, Uint8Array, WebAssembly};
 use tracing::{debug, warn};
 use wasm_bindgen::{prelude::*, JsValue};
 use wasmer_types::{
@@ -73,11 +73,10 @@ impl Module {
     ) -> Result<Self, CompileError> {
         let js_bytes = Uint8Array::view(binary);
         let module = WebAssembly::Module::new(&js_bytes.into()).map_err(|e| {
-            CompileError::Validate(format!(
-                "{}",
-                e.as_string()
+            CompileError::Validate(
+                Object::try_from(&e).and_then(|e| e.to_string().as_string())
                     .unwrap_or("Unknown validation error".to_string())
-            ))
+            )
         })?;
         Ok(Self::from_js_module(module, binary))
     }
