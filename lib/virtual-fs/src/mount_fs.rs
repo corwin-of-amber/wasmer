@@ -198,6 +198,10 @@ impl MountFileSystem {
         normalized
     }
 
+    #[cfg(target_arch = "wasm32")]
+    fn now_nanos() -> u64 { 0 }
+
+    #[cfg(not(target_arch = "wasm32"))]
     fn now_nanos() -> u64 {
         SystemTime::now()
             .duration_since(UNIX_EPOCH)
