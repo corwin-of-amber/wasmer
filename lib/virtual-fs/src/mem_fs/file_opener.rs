@@ -189,7 +189,7 @@ impl FileSystem {
                             let time = time();
                             Metadata {
                                 ft: FileType {
-                                    file: true,
+                                    dir: true,
                                     ..Default::default()
                                 },
                                 accessed: time,
@@ -394,7 +394,7 @@ impl crate::FileOpener for FileSystem {
                         lifecycle,
                         ..
                     })) => {
-                        // Update the accessed time.
+                        // Update the accessed time (and len if it is being truncated)
                         metadata.accessed = time();
 
                         // Truncate if needed.

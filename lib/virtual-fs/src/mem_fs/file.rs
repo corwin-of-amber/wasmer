@@ -1664,15 +1664,19 @@ impl File {
 
 impl File {
     pub fn read(&self, buf: &mut [u8], cursor: &mut u64) -> io::Result<usize> {
+        Self::read_inner(&self.buffer[..], buf, cursor)
+    }
+
+    pub fn read_inner(file: &[u8], buf: &mut [u8], cursor: &mut u64) -> io::Result<usize> {        
         let cur_pos = *cursor as usize;
 
         // POSIX regular files return EOF, not an error, when reading at or beyond EOF.
-        if cur_pos >= self.buffer.len() {
+        if cur_pos >= file.len() {
             return Ok(0);
         }
 
-        let max_to_read = cmp::min(self.buffer.len() - cur_pos, buf.len());
-        let data_to_copy = &self.buffer[cur_pos..][..max_to_read];
+        let max_to_read = cmp::min(file.len() - cur_pos, buf.len());
+        let data_to_copy = &file[cur_pos..][..max_to_read];
 
         // SAFETY: `buf[..max_to_read]` and `data_to_copy` have the same size, due to
         // how `max_to_read` is computed.
@@ -1686,6 +1690,10 @@ impl File {
 
 impl File {
     pub fn seek(&self, position: io::SeekFrom, cursor: &mut u64) -> io::Result<u64> {
+        Self::seek_inner(position, cursor, self.buffer.len())
+    }
+
+    pub fn seek_inner(position: io::SeekFrom, cursor: &mut u64, size: usize) -> io::Result<u64> {
         let to_err = |_| io::ErrorKind::InvalidInput;
 
         // Calculate the next cursor.
@@ -1695,7 +1703,7 @@ impl File {
 
             // Calculate from the end, so `buffer.len() + offset`.
             io::SeekFrom::End(offset) => {
-                TryInto::<i64>::try_into(self.buffer.len()).map_err(to_err)? + offset
+                TryInto::<i64>::try_into(size).map_err(to_err)? + offset
             }
 
             // Calculate from the current cursor, so `cursor + offset`.
@@ -1770,26 +1778,13 @@ impl ReadOnlyFile {
 
 impl ReadOnlyFile {
     pub fn read(&self, buf: &mut [u8], cursor: &mut u64) -> io::Result<usize> {
-        let cur_pos = *cursor as usize;
-        let max_to_read = cmp::min(self.buffer.len() - cur_pos, buf.len());
-        let data_to_copy = &self.buffer[cur_pos..][..max_to_read];
-
-        // SAFETY: `buf[..max_to_read]` and `data_to_copy` have the same size, due to
-        // how `max_to_read` is computed.
-        buf[..max_to_read].copy_from_slice(data_to_copy);
-
-        *cursor += max_to_read as u64;
-
-        Ok(max_to_read)
+        File::read_inner(&self.buffer[..], buf, cursor)
     }
 }
 
 impl ReadOnlyFile {
-    pub fn seek(&self, _position: io::SeekFrom, _cursor: &mut u64) -> io::Result<u64> {
-        Err(io::Error::new(
-            io::ErrorKind::PermissionDenied,
-            "file is read-only",
-        ))
+    pub fn seek(&self, position: io::SeekFrom, cursor: &mut u64) -> io::Result<u64> {
+        File::seek_inner(position, cursor, self.buffer.len())
     }
 }
 
