@@ -474,6 +474,16 @@ impl crate::FileOpener for FileSystem {
                         node.lifecycle.clone()
                     }
 
+                    Some(Node::Symlink(node)) => {
+                        // this really is a "best effort" and does not cover all bases w.r.t symlink resolution
+                        let target = path.parent().map_or_else(
+                            || node.target.clone(), 
+                            |from| from.join(node.target.clone()));
+                        drop(fs);
+                        // does not check for cycles..!
+                        return self.open(&target, conf)
+                    }
+
                     None => return Err(FsError::EntryNotFound),
                     _ => return Err(FsError::NotAFile),
                 };
