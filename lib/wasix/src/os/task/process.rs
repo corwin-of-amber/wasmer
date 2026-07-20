@@ -619,8 +619,14 @@ impl WasiProcess {
 
     /// Registers the shared memory used by this process.
     pub fn register_memory(&self, memory: SharedMemory) {
-        let mut inner = self.inner.0.lock().unwrap();
-        inner.memory = Some(memory);
+        /* This CANNOT be done in Js backend; there, `SharedMemory` holds a `JsValue`, */
+        /*   which can only be accessed by the thread (worker) that created it.        */
+        /*   It can be transferred between workers, but only via `postMessage`.        */
+        #[cfg(not(feature = "js"))]
+        {
+            let mut inner = self.inner.0.lock().unwrap();
+            inner.memory = Some(memory);
+        }
     }
 
     /// Takes a snapshot of the process and disables journaling returning
