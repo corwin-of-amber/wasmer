@@ -1,7 +1,7 @@
 use std::path::Path;
 
 use bytes::Bytes;
-use js_sys::{Reflect, Uint8Array, WebAssembly};
+use js_sys::{Object, Reflect, Uint8Array, WebAssembly};
 use tracing::{debug, warn};
 use wasm_bindgen::{JsValue, prelude::*};
 use wasmer_types::{
@@ -71,12 +71,14 @@ impl Module {
         _engine: &impl AsEngineRef,
         binary: &[u8],
     ) -> Result<Self, CompileError> {
-        let js_bytes = unsafe { Uint8Array::view(binary) };
+        /* (todo) `Uint8Array::view` works in Chrome, but Firefox refuses to */
+        /* accept a shared buffer in sync compilation of WebAssembly.Module */
+        //let js_bytes = Uint8Array::view(binary);
+        let js_bytes = Uint8Array::new_from_slice(binary);
         let module = WebAssembly::Module::new(&js_bytes.into()).map_err(|e| {
             CompileError::Validate(
-                e.as_string()
+                Object::try_from(&e).and_then(|e| e.to_string().as_string())
                     .unwrap_or("Unknown validation error".to_string())
-                    .to_string(),
             )
         })?;
         Ok(unsafe { Self::from_js_module(module, binary) })
