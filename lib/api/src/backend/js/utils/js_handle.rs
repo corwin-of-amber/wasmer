@@ -177,12 +177,17 @@ mod integrity_check {
     }
 
     fn record_backtrace() -> Option<String> {
-        let err = js_sys::Error::new("");
-        let stack = JsString::from(wasm_bindgen::intern("stack"));
+        if cfg!(feature = "js-handle-backtrace") {
+            let err = js_sys::Error::new("");
+            let stack = JsString::from(wasm_bindgen::intern("stack"));
 
-        js_sys::Reflect::get(&err, &stack)
-            .ok()
-            .and_then(|v| v.as_string())
+            js_sys::Reflect::get(&err, &stack)
+                .ok()
+                .and_then(|v| v.as_string()) 
+        }
+        else {
+            None
+        }
     }
 }
 

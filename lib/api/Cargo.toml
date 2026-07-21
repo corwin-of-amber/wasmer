@@ -162,6 +162,7 @@ wasm-types-polyfill = ["wasmparser"]
 wat = ["dep:wat", "wasmparser"]
 
 js-serializable-module = []
+js-handle-backtrace = []
 
 # Optional
 enable-serde = [
