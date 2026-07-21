@@ -148,6 +148,7 @@ pub struct Tty {
     stdin: Box<dyn VirtualFile + Send + Sync + 'static>,
     stdout: Box<dyn VirtualFile + Send + Sync + 'static>,
     signaler: Option<Box<dyn SignalHandlerAbi + Send + Sync + 'static>>,
+    eof: bool,
     is_mobile: bool,
     last: Option<(String, u128)>,
     options: TtyOptions,
@@ -529,6 +530,7 @@ impl Tty {
             stdin,
             stdout,
             signaler: None,
+            eof: false,
             last: None,
             options,
             is_mobile,
@@ -557,6 +559,16 @@ impl Tty {
         let mut stdin: Box<dyn VirtualFile + Send + Sync + 'static> = Box::<NullFile>::default();
         std::mem::swap(&mut self.stdin, &mut stdin);
         stdin
+    }
+
+    pub fn eof(&self) -> bool {
+        self.eof
+    }
+
+    pub fn eof_take(&mut self) -> bool {
+        let mut eof = false;
+        std::mem::swap(&mut self.eof, &mut eof);
+        eof
     }
 
     pub fn options(&self) -> TtyOptions {
@@ -636,6 +648,9 @@ impl Tty {
                 if !self.line.is_empty() {
                     let data = self.line.take_line();
                     self.write_stdin(data.as_bytes()).await;
+                }
+                else {
+                    self.eof = true;
                 }
             }
             ParsedInput::CtrlC => {
