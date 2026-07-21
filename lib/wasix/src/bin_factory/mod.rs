@@ -101,7 +101,7 @@ impl BinFactory {
         self.get_executable(name, fs)
             .await
             .and_then(|executable| match executable {
-                Executable::Wasm(_) => None,
+                Executable::Wasm(..) => None,
                 Executable::BinaryPackage(pkg) => Some(pkg),
             })
     }
@@ -109,7 +109,7 @@ impl BinFactory {
     pub fn spawn<'a>(
         &'a self,
         name: String,
-        env: WasiEnv,
+        mut env: WasiEnv,
     ) -> Pin<Box<dyn Future<Output = Result<TaskJoinHandle, SpawnError>> + 'a>> {
         Box::pin(async move {
             // Find the binary (or die trying) and make the spawn type
@@ -123,8 +123,9 @@ impl BinFactory {
 
             // Execute
             match executable {
-                Executable::Wasm(bytes) => {
+                Executable::Wasm(bytes, mut pre_args) => {
                     let data = HashedModuleData::new(bytes.clone());
+                    apply_pre_args(&mut env, pre_args, &name);
                     spawn_exec_wasm(data, name.as_str(), env, &self.runtime).await
                 }
                 Executable::BinaryPackage(pkg) => {
@@ -210,7 +211,7 @@ impl BinFactory {
 }
 
 pub enum Executable {
-    Wasm(OwnedBuffer),
+    Wasm(OwnedBuffer, Vec<String>),
     BinaryPackage(Arc<BinaryPackage>),
 }
 
@@ -227,33 +228,65 @@ async fn load_executable_from_filesystem(
 
     // Fast path if the file is fully available in memory.
     // Prevents redundant copying of the file data.
-    if let Some(buf) = f.as_owned_buffer() {
-        if wasmer_package::utils::is_container(buf.as_slice()) {
-            let bytes = buf.clone().into_bytes();
-            if let Ok(container) = from_bytes(bytes.clone()) {
-                let pkg = BinaryPackage::from_webc(&container, rt)
-                    .await
-                    .context("Unable to load the package")?;
-
-                return Ok(Executable::BinaryPackage(Arc::new(pkg)));
-            }
-        }
-
-        Ok(Executable::Wasm(buf))
-    } else {
+    let obuf: Option<OwnedBuffer> = f.as_owned_buffer();
+    let bytes: Option<bytes::Bytes> = if obuf.is_some() { None } else {
         let mut data = Vec::with_capacity(f.size() as usize);
         f.read_to_end(&mut data).await.context("Read failed")?;
+        Some(data.into())
+    };
+    let bytes_slice = &obuf.as_ref().map(|buf| &buf[..])
+        .unwrap_or_else(|| &bytes.as_ref().unwrap()[..]);
 
-        let bytes: bytes::Bytes = data.into();
+    if let Some(exec) = Box::pin(shebang(fs, bytes_slice, rt)).await? {
+        Ok(exec)
+    }
+    else if let Some(container) = container_from_slice(bytes_slice) {
+        let pkg = BinaryPackage::from_webc(&container, rt)
+            .await
+            .context("Unable to load the package")?;
 
-        if let Ok(container) = from_bytes(bytes.clone()) {
-            let pkg = BinaryPackage::from_webc(&container, rt)
-                .await
-                .context("Unable to load the package")?;
+        Ok(Executable::BinaryPackage(Arc::new(pkg)))
+    }
+    else {
+        let buf = obuf.unwrap_or_else(|| OwnedBuffer::from_bytes(bytes.unwrap()));
+        Ok(Executable::Wasm(buf, vec![]))
+    }
+}
 
-            Ok(Executable::BinaryPackage(Arc::new(pkg)))
-        } else {
-            Ok(Executable::Wasm(OwnedBuffer::from_bytes(bytes)))
+
+fn container_from_slice(bytes: &[u8]) -> Option<webc::Container> {
+    // can use a let-chain when Rust edition is bumped to 2024
+    if wasmer_package::utils::is_container(bytes) {
+        if let Ok(container) = from_bytes(bytes.to_vec()) {
+            return Some(container);
         }
+    }
+    None
+}
+
+async fn shebang(fs: &dyn FileSystem, bytes: &[u8], rt: &(dyn Runtime + Send + Sync)) -> Result<Option<Executable>, anyhow::Error> {
+    let pfx = &bytes[0..2];
+    if pfx == [b'#', b'!'] &&
+            let Some(eol) = bytes.iter().position(|&x| x == b'\n') {
+        let interp = String::from_utf8_lossy(&bytes[2..eol]).trim().to_owned();
+        match load_executable_from_filesystem(fs, interp.as_ref(), rt).await? {
+            Executable::Wasm(exe, mut pre_args) => {
+                pre_args.insert(0, interp);
+                Ok(Some(Executable::Wasm(exe, pre_args)))
+            }
+            e => Ok(Some(e))
+        }
+    }
+    else {
+        Ok(None)
+    }
+}
+
+fn apply_pre_args(env: &mut WasiEnv, mut pre_args: Vec<String>, filename: &String) {
+    if !pre_args.is_empty() {
+        let mut state = env.state.fork();
+        pre_args.push(filename.clone());  // replace argv[0] with full path
+        state.args.get_mut().unwrap().splice(0..1, pre_args.drain(..));
+        env.state = Arc::new(state);
     }
 }
