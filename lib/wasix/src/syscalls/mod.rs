@@ -904,8 +904,7 @@ pub(crate) fn parse_delimited_string_list(s: &str) -> Vec<String> {
 }
 
 pub(crate) fn parse_delimited_exec_args(s: &str) -> Vec<String> {
-    s.trim_end_matches(['\r', '\n'])
-        .lines()
+    s.lines()
         .map(str::to_owned)
         .collect()
 }
