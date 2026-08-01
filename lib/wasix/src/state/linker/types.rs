@@ -49,7 +49,7 @@ pub struct PreparedInstanceGroupData {
     pub(super) topology_token: TopologyToken,
 
     // Data read from the parent context
-    pub(super) memory: SharedMemory,
+    pub memory: SharedMemory,
     pub(super) indirect_function_table_type: TableType,
     pub(super) expected_table_length: u32,
 }

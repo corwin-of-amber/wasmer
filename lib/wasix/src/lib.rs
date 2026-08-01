@@ -117,6 +117,7 @@ pub use crate::{
     state::{
         ALL_RIGHTS, WasiEnv, WasiEnvBuilder, WasiEnvInit, WasiFunctionEnv,
         WasiModuleInstanceHandles, WasiModuleTreeHandles, WasiStateCreationError,
+        main_module_function_table_type,
     },
     syscalls::{journal::wait_for_snapshot, rewind, rewind_ext, types, unwind},
     utils::is_wasix_module,

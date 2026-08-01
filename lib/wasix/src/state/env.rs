@@ -30,7 +30,7 @@ use virtual_mio::block_on;
 use virtual_net::DynVirtualNetworking;
 use wasmer::{
     AsStoreMut, AsStoreRef, ExportError, FunctionEnvMut, Instance, Memory, MemoryType, MemoryView,
-    Module,
+    Module, Table,
 };
 use wasmer_config::package::PackageSource;
 use wasmer_types::ModuleHash;
@@ -566,6 +566,13 @@ impl WasiEnv {
                 _ => None,
             });
 
+        let indirect_function_table : Option<Table> = import_object
+            .get_export("env", "__indirect_function_table")
+            .and_then(|ext| match ext {
+                wasmer::Extern::Table(table) => Some(table),
+                _ => None,
+            });
+
         // Construct the instance.
         let instance = match Instance::new(&mut store, &module, &import_object) {
             Ok(a) => a,
@@ -591,7 +598,7 @@ impl WasiEnv {
                 memory,
                 &store,
                 instance.clone(),
-                None,
+                indirect_function_table,
             )),
             None => {
                 let exported_memory = instance
@@ -612,7 +619,7 @@ impl WasiEnv {
                     exported_memory,
                     &store,
                     instance.clone(),
-                    None,
+                    indirect_function_table,
                 ))
             }
         };

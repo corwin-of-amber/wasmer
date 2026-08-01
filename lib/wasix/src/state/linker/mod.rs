@@ -283,6 +283,7 @@ use memory_allocator::*;
 use runtime_hooks::instantiate_with_runtime_hooks;
 use sync::*;
 pub(crate) use wasm_utils::*;
+pub use wasm_utils::main_module_function_table_type;
 
 use std::{
     collections::{BTreeMap, HashMap},

@@ -62,13 +62,13 @@ pub(super) fn define_integer_global_import(
     Ok(global)
 }
 
-pub(super) fn main_module_function_table_type(
+pub fn main_module_function_table_type(
     main_module: &Module,
 ) -> Result<TableType, LinkError> {
     main_module
         .imports()
         .tables()
-        .filter_map(|t| {
+        .find_map(|t| {
             if t.ty().ty == Type::FuncRef
                 && t.name() == "__indirect_function_table"
                 && t.module() == "env"
@@ -78,7 +78,6 @@ pub(super) fn main_module_function_table_type(
                 None
             }
         })
-        .next()
         .ok_or(LinkError::MissingMainModuleImport(
             "env.__indirect_function_table".to_string(),
         ))
