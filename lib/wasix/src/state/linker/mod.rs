@@ -282,7 +282,7 @@ use locator::*;
 use memory_allocator::*;
 use runtime_hooks::instantiate_with_runtime_hooks;
 use sync::*;
-use wasm_utils::*;
+pub(crate) use wasm_utils::*;
 
 use std::{
     collections::{BTreeMap, HashMap},
@@ -297,6 +297,7 @@ use wasmer::{AsStoreMut, Engine, FunctionEnvMut, Memory, Module, StoreMut, Tag, 
 use wasmer_wasix_types::wasix::WasiMemoryLayout;
 
 use crate::{WasiEnv, WasiFunctionEnv, WasiModuleTreeHandles, import_object_for_all_wasi_versions};
+use crate::syscalls::{Value, Extern};
 
 use super::WasiModuleInstanceHandles;
 
@@ -1334,4 +1335,45 @@ impl Linker {
         let linker_state = self.shared.write_linker_state(group_state, ctx)?;
         Ok(linker_state.side_modules.contains_key(&handle))
     }
+}
+
+
+/**
+ * A lean version of the linker ("lean-ker") for use when no linker is available.
+ * This only resolves symbols exported from the current executable module (no dynamic libraries, naturally).
+ */
+pub(crate) fn resolve_symbol_from_exe(env: &mut WasiEnv, store: &mut StoreMut<'_>, symbol: String) -> Result<u32, ResolveError> {
+
+    let env_inner = env.inner();
+    let instance_handles = env_inner.main_module_instance_handles();
+
+    let instance = instance_handles.instance();
+    let ext = instance.exports.get_extern(&symbol).ok_or(ResolveError::MissingExport)?;
+
+    match ext {
+        Extern::Function(func) => {
+            let table = instance_handles.indirect_function_table.as_ref().unwrap();
+            let existing = (1..table.size(store)).find(|i| {
+                match table.get(store, *i) {
+                    Some(Value::FuncRef(Some(f))) => f == *func,
+                    _ => false
+                }});
+            let addr = existing.unwrap_or_else(|| table.grow(store, 1, func.clone().into()).unwrap());
+            return Ok(addr)
+        },
+        Extern::Global(value) => {
+            let mem_base = env.layout().tls_base.unwrap_or(0);  // assume that this is the main module; otherwise there would have been a Linker
+            let value = value.get(store);
+            let offset = match value {
+                Value::I32(value) => value as u64,
+                Value::I64(value) => value as u64,
+                _ => {
+                    return Err(ResolveError::InvalidExportType(ext.ty(store)))
+                }
+            };
+            let addr = (mem_base + offset) as u32;
+            return Ok(addr)                
+        },
+        _ => todo!("[dlsym] resolve {symbol} {ext:?}")
+    }    
 }

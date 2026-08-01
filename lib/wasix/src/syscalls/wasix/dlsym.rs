@@ -25,12 +25,19 @@ pub fn dlsym<M: MemorySize>(
 
     let env_inner = unsafe { env.inner() };
     let Some(linker) = env_inner.linker() else {
-        wasi_dl_err!(
-            "The current instance is not a dynamically-linked instance",
+        // not a dynamic executable - use the "lean-ker"
+        let addr = crate::state::resolve_symbol_from_exe(env, &mut store, symbol);
+
+        let memory = unsafe { env.memory_view(&store) };
+        let addr = wasi_try_dl!(
+            addr,
+            "symbol not found: {}",
             memory,
             err_buf,
             err_buf_len
         );
+        out_symbol.write(&memory, addr.into());
+        return Ok(Errno::Success);
     };
     let linker = linker.clone();
 
