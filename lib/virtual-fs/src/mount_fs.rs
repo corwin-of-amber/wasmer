@@ -10,6 +10,10 @@ use std::{
     ffi::OsString,
     path::{Path, PathBuf},
     sync::{Arc, RwLock},
+};
+
+#[cfg(not(target_arch = "wasm32"))]
+use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
@@ -466,6 +470,23 @@ impl MountFileSystem {
         Self::collect_mount_entries(&root, Path::new("/"), &mut entries);
         entries
     }
+
+    pub(self) fn resolve_symlink(&self, path: impl AsRef<Path>, resolved: ResolvedMount) -> ResolvedMount {
+        match resolved.fs.readlink(&resolved.delegated_path) {
+            Ok(linked) => {
+                // this really is a "best effort" and does not cover all bases w.r.t symlink resolution
+                let target = path.as_ref().parent().map_or_else(
+                    || linked.clone(), 
+                    |from| from.join(linked.clone()));
+                // does not check for cycles..!
+                if let Some(resolved) = self.resolve_mount(&target) {
+                    self.resolve_symlink(&target, resolved)
+                }
+                else { resolved }
+            }
+            Err(..) => resolved
+        }
+    }
 }
 
 impl FileSystem for MountFileSystem {
@@ -760,12 +781,15 @@ impl FileOpener for MountFileSystem {
             return Err(FsError::NotAFile);
         }
 
-        match self.resolve_mount(path) {
-            Some(resolved) => resolved
-                .fs
-                .new_open_options()
-                .options(conf.clone())
-                .open(resolved.delegated_path),
+        match self.resolve_mount(&path) {
+            Some(resolved) => {
+                let resolved = self.resolve_symlink(path, resolved);
+                resolved
+                    .fs
+                    .new_open_options()
+                    .options(conf.clone())
+                    .open(resolved.delegated_path)
+            }
             None => Err(FsError::EntryNotFound),
         }
     }

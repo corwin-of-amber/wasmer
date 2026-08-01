@@ -123,7 +123,7 @@ impl BinFactory {
 
             // Execute
             match executable {
-                Executable::Wasm(bytes, mut pre_args) => {
+                Executable::Wasm(bytes, pre_args) => {
                     let data = HashedModuleData::new(bytes.clone());
                     apply_pre_args(&mut env, pre_args, &name);
                     spawn_exec_wasm(data, name.as_str(), env, &self.runtime).await
