@@ -1353,13 +1353,8 @@ pub(crate) fn resolve_symbol_from_exe(env: &mut WasiEnv, store: &mut StoreMut<'_
 
     match ext {
         Extern::Function(func) => {
-            let table = instance_handles.indirect_function_table.as_ref().unwrap();
-            let existing = (1..table.size(store)).find(|i| {
-                match table.get(store, *i) {
-                    Some(Value::FuncRef(Some(f))) => f == *func,
-                    _ => false
-                }});
-            let addr = existing.unwrap_or_else(|| table.grow(store, 1, func.clone().into()).unwrap());
+            let table = instance_handles.indirect_function_table.as_ref().ok_or(ResolveError::MissingExport)?;
+            let addr = table.grow(store, 1, func.clone().into()).map_err(ResolveError::TableAllocationError)?;
             return Ok(addr)
         },
         Extern::Global(value) => {
