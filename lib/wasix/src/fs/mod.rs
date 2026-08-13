@@ -2701,6 +2701,10 @@ impl WasiFs {
     }
 
     fn file_flush_target(inode: &InodeGuard) -> Option<VirtualFileLock> {
+        // STDIN could be a pipe that is currently being polled.
+        // In which case, flushing it may lead to a deadlock.
+        // (this may be true for other pipes... perhaps rethink pipe locking scheme)
+        if inode.ino == FS_STDIN_INO { return None; }
         let guard = inode.read();
         match guard.deref() {
             Kind::File {
