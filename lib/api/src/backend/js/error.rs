@@ -63,6 +63,16 @@ impl Trap {
     pub fn to_exception_ref(&self) -> Option<VMExceptionRef> {
         None
     }
+
+    pub fn is_trap(value: &JsValue) -> bool {
+        value.is_object() && {
+            let Ok(prototype) = &Reflect::get_prototype_of(value) else { return false };
+            let class = prototype.constructor();
+            let key = JsValue::from_str("__wbg_wasmer_trap");
+
+            Reflect::get(&class, &key).is_ok_and(|f| f.is_function())
+        }
+    }
 }
 
 #[wasm_bindgen]

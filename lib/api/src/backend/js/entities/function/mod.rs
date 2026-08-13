@@ -4,7 +4,7 @@ use std::marker::PhantomData;
 
 pub(crate) use typed::*;
 
-use js_sys::{Array, Function as JsFunction};
+use js_sys::{Array, Function as JsFunction, Reflect};
 use wasm_bindgen::{JsCast, prelude::*};
 use wasmer_types::{FunctionType, RawValue};
 
@@ -15,7 +15,7 @@ use crate::{
     WithoutEnv,
     js::{
         utils::convert::{AsJs as _, js_value_to_wasmer, wasmer_value_to_js},
-        vm::{VMFuncRef, VMFunctionCallback, function::VMFunction},
+        vm::{Trap, VMFuncRef, VMFunctionCallback, function::VMFunction},
     },
     vm::{VMExtern, VMExternFunction},
 };
@@ -224,7 +224,9 @@ impl Function {
                     &arr,
                 );
                 if let Err(e) = &r {
-                    web_sys::console::warn_1(&e.clone().into());
+                    if !Trap::is_trap(e) {
+                        web_sys::console::warn_1(&e.clone().into());
+                    }
                 }
                 let store_mut = store.as_store_mut();
                 if let Some(callback) = store_mut.inner.on_called.take() {
