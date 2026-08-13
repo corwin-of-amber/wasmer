@@ -36,6 +36,7 @@ tracing = { workspace = true, default-features = true }
 wat = { workspace = true, optional = true }
 symbolic-demangle.workspace = true
 shared-buffer.workspace = true
+lru = { version = "0.18.2", optional = true }
 
 loupe = { workspace = true, optional = true, features = [
   "indexmap",
@@ -155,7 +156,7 @@ v8-default = ["v8", "wat"]
 wasm-c-api = ["wasm-types-polyfill"]
 
 # Features for `js`.
-js = ["wasm-bindgen", "js-sys"]
+js = ["wasm-bindgen", "js-sys", "lru"]
 js-default = ["js", "std", "wasm-types-polyfill"]
 
 wasm-types-polyfill = ["wasmparser"]

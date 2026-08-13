@@ -34,10 +34,13 @@ impl loupe::MemoryUsage for ModuleHash {
 }
 
 impl ModuleHash {
+    /// WASM files may be huge. Limit the hash computation to first m bytes.
+    const MAX_PREFIX: usize = 1 << 16;
+
     /// Generate a new [`ModuleHash`] based on the Sha256 hash of some bytes.
     pub fn new(wasm: impl AsRef<[u8]>) -> Self {
         let wasm = wasm.as_ref();
-        let hash = sha2::Sha256::digest(wasm).into();
+        let hash = sha2::Sha256::digest(&wasm[..Self::MAX_PREFIX]).into();
         Self(hash)
     }
 

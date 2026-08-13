@@ -1,4 +1,5 @@
 use std::path::Path;
+use std::sync::Arc;
 
 use bytes::Bytes;
 use js_sys::{Object, Reflect, Uint8Array, WebAssembly};
@@ -6,42 +7,26 @@ use tracing::{debug, warn};
 use wasm_bindgen::{JsValue, prelude::*};
 use wasmer_types::{
     CompileError, DeserializeError, ExportType, ExportsIterator, ExternType, FunctionType,
-    GlobalType, ImportType, ImportsIterator, MemoryType, ModuleInfo, Mutability, Pages,
-    SerializeError, TableType, Type,
+    GlobalType, ImportType, ImportsIterator, MemoryType, ModuleHash, ModuleInfo, Mutability, Pages,
+    SerializeError, TableType, TagKind, TagType, Type,
 };
 
 use crate::{
     AsEngineRef, AsStoreMut, BackendModule, Extern, Imports, InstantiationError, IntoBytes,
-    RuntimeError,
+    RuntimeError, Tag,
     js::{
         utils::{convert::AsJs as _, js_handle::JsHandle},
         vm::VMInstance,
     },
+    info_cache::ModuleTypeHints,
 };
-
-/// WebAssembly in the browser doesn't yet output the descriptor/types
-/// corresponding to each extern (import and export).
-///
-/// This should be fixed once the JS-Types Wasm proposal is adopted
-/// by the browsers:
-/// <https://github.com/WebAssembly/js-types/blob/master/proposals/js-types/Overview.md>
-///
-/// Until that happens, we annotate the module with the expected
-/// types so we can built on top of them at runtime.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ModuleTypeHints {
-    /// The type hints for the imported types
-    pub imports: Vec<ExternType>,
-    /// The type hints for the exported types
-    pub exports: Vec<ExternType>,
-}
 
 #[derive(Clone, PartialEq, Eq)]
 pub struct Module {
     module: JsHandle<WebAssembly::Module>,
     name: Option<String>,
     // WebAssembly type hints
-    type_hints: Option<ModuleTypeHints>,
+    type_hints: Option<Arc<ModuleTypeHints>>,
     #[cfg(feature = "js-serializable-module")]
     raw_bytes: Option<Bytes>,
 }
@@ -91,29 +76,34 @@ impl Module {
     ) -> Self {
         let binary = binary.into_bytes();
 
+        let key = ModuleHash::new(&binary);
+
         // The module is now validated, so we can safely parse it's types
         #[cfg(feature = "wasm-types-polyfill")]
         let (type_hints, name) = if binary.len() > 0 {
-            let info = crate::polyfill::translate_module(&binary[..]).unwrap();
+            crate::utils::info_cache::get(&key).unwrap_or_else(|| {
+                let info = crate::polyfill::translate_module(&binary[..]).unwrap();
 
-            (
-                Some(ModuleTypeHints {
-                    imports: info
-                        .info
-                        .imports()
-                        .map(|import| import.ty().clone())
-                        .collect::<Vec<_>>(),
-                    exports: info
-                        .info
-                        .exports()
-                        .map(|export| export.ty().clone())
-                        .collect::<Vec<_>>(),
-                }),
-                info.info.name,
-            )
+                (
+                    Some(Arc::new(crate::info_cache::ModuleTypeHints {
+                        imports: info
+                            .info
+                            .imports()
+                            .map(|import| import.ty().clone())
+                            .collect::<Vec<_>>(),
+                        exports: info
+                            .info
+                            .exports()
+                            .map(|export| export.ty().clone())
+                            .collect::<Vec<_>>(),
+                    })),
+                    info.info.name,
+                )})
         } else { (None, None) };
         #[cfg(not(feature = "wasm-types-polyfill"))]
         let (type_hints, name) = (None, None);
+
+        crate::info_cache::put(&key, binary.len(), (&type_hints, &name));
 
         Self {
             module: JsHandle::new(module),
@@ -353,6 +343,10 @@ impl Module {
                                 let table_type = TableType::new(Type::FuncRef, 1, None);
                                 ExternType::Table(table_type)
                             }
+                            "tag" => {
+                                let tag_type = TagType::new(TagKind::Exception, vec![]);
+                                ExternType::Tag(tag_type)
+                            }
                             _ => unimplemented!(),
                         }
                     };
@@ -402,7 +396,7 @@ impl Module {
                 ));
             }
         }
-        self.type_hints = Some(type_hints);
+        self.type_hints = Some(Arc::new(type_hints));
         Ok(())
     }
 
@@ -431,7 +425,7 @@ impl Module {
                 let type_hint = self
                     .type_hints
                     .as_ref()
-                    .map(|hints| hints.exports.get(i).unwrap().clone());
+                    .and_then(|hints| hints.exports.get(i).map(|o| o.clone()));
                 let extern_type = if let Some(hint) = type_hint {
                     hint
                 } else {

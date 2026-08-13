@@ -18,5 +18,6 @@ pub(crate) mod rt_macros;
 
 #[cfg(feature = "wasm-types-polyfill")]
 pub(crate) mod polyfill;
+pub(crate) mod info_cache;
 
 pub(crate) mod macros;
