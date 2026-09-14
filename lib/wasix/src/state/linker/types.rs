@@ -49,9 +49,19 @@ pub struct PreparedInstanceGroupData {
     pub(super) topology_token: TopologyToken,
 
     // Data read from the parent context
-    pub memory: SharedMemory,
+    pub module: Option<wasmer::Module>,
+    pub memory: Option<SharedMemory>,
     pub(super) indirect_function_table_type: TableType,
     pub(super) expected_table_length: u32,
+}
+
+impl PreparedInstanceGroupData {
+    pub fn localize(mut self, module: &wasmer::Module, memory: Option<&wasmer::Memory>, store: &wasmer::Store) -> Self {
+        if let Some(ref m) = self.module && m == module {
+            self.memory = memory.and_then(|m| m.as_shared(store));
+        }
+        self
+    }
 }
 
 pub enum DlModuleSpec<'a> {

@@ -73,6 +73,10 @@ impl WasiFunctionEnv {
 
         let mut store = store.unwrap_or_else(|| env.runtime().new_store());
 
+        let linker_instance_group_data =
+            linker_instance_group_data.map(|gd|
+                gd.localize(&module, memory.as_ref(), &store));
+
         let (_, ctx) = env.instantiate(
             module,
             &mut store,
