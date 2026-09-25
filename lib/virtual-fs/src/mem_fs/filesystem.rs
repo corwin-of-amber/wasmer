@@ -45,6 +45,18 @@ impl FileSystem {
         Ok(self)
     }
 
+    /// Sets a backing store after-the-fact. This is important for lazy
+    /// loading of filesystem data.
+    /// 
+    /// Panics if backing store already exists, in order to not invalidate
+    /// existing files.
+    pub fn set_backing_offload(&self, buffer: OffloadBackingStore) -> Result<()> {
+        let mut lock = self.inner.write().map_err(|_| FsError::Lock)?;
+        assert!(lock.backing_offload.is_none());
+        lock.backing_offload.replace(buffer);
+        Ok(())
+    }
+
     /// Canonicalize a path without validating that it actually exists.
     pub fn canonicalize_unchecked(&self, path: &Path) -> Result<PathBuf> {
         let lock = self.inner.read().map_err(|_| FsError::Lock)?;

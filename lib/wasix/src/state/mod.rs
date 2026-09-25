@@ -50,8 +50,10 @@ use crate::{
 };
 pub(crate) use handles::*;
 pub(crate) use linker::*;
-pub use linker::PreparedInstanceGroupData;
-pub use linker::main_module_function_table_type;
+pub use linker::{
+    is_dynamically_linked, main_module_function_table_type,
+    PreparedInstanceGroupData,
+};
 
 /// all the rights enabled
 pub const ALL_RIGHTS: Rights = Rights::all();

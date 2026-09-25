@@ -117,7 +117,8 @@ pub use crate::{
     state::{
         ALL_RIGHTS, WasiEnv, WasiEnvBuilder, WasiEnvInit, WasiFunctionEnv,
         WasiModuleInstanceHandles, WasiModuleTreeHandles, WasiStateCreationError,
-        PreparedInstanceGroupData, main_module_function_table_type,
+        is_dynamically_linked, main_module_function_table_type,
+        PreparedInstanceGroupData,
     },
     syscalls::{journal::wait_for_snapshot, rewind, rewind_ext, types, unwind},
     utils::is_wasix_module,

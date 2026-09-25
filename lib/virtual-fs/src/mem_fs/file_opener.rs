@@ -214,6 +214,7 @@ impl FileSystem {
         Ok(())
     }
 
+
     /// Inserts a arc directory into the file system that references another file
     /// in another file system (does not copy the real data)
     pub fn insert_arc_directory(
@@ -223,6 +224,56 @@ impl FileSystem {
     ) -> Result<()> {
         self.insert_arc_directory_at(target_path.clone(), other, target_path)
     }
+
+    /// Inserts a file referencing a slice of the offload storage
+    /// (this is needed for efficient deserialization)
+    pub fn insert_offloaded_file(&self, path: &Path, offset: u64, size: u64) -> Result<()> {
+        let _ = crate::FileSystem::remove_file(self, path);
+        let (inode_of_parent, maybe_inode_of_file, name_of_file) = self.insert_inode(path)?;
+
+        let inode_of_parent = match inode_of_parent {
+            InodeResolution::Found(a) => a,
+            InodeResolution::Redirect(..) => {
+                return Err(FsError::InvalidInput);
+            }
+        };
+
+        match maybe_inode_of_file {
+            // The file already exists, then it can not be inserted.
+            Some(_inode_of_file) => return Err(FsError::AlreadyExists),
+
+            // The file doesn't already exist; it's OK to create it if
+            None => {
+                // Write lock.
+                let mut fs = self.inner.write().map_err(|_| FsError::Lock)?;
+
+                let file = OffloadedFile::new(None, fs.backing_offload.clone().unwrap())
+                    .with_span(offset, size);
+                let metadata = self.default_metadata(file.len());
+
+                // Creating the file in the storage.
+                let inode_of_file = fs.storage.vacant_entry().key();
+                let real_inode_of_file = fs.storage.insert(Node::OffloadedFile(OffloadedFileNode {
+                    inode: inode_of_file,
+                    name: name_of_file,
+                    file,
+                    metadata,
+                    lifecycle: Arc::default(),
+                }));
+
+                assert_eq!(
+                    inode_of_file, real_inode_of_file,
+                    "new file inode should have been correctly calculated",
+                );
+
+                // Adding the new directory to its parent.
+                fs.add_child_to_node(inode_of_parent, inode_of_file)?;
+
+                inode_of_file
+            }
+        };
+        Ok(())
+    }    
 
     /// Inserts a arc file into the file system that references another file
     /// in another file system (does not copy the real data)
@@ -321,6 +372,20 @@ impl FileSystem {
             maybe_inode_of_file,
             name_of_file,
         ))
+    }
+
+    fn default_metadata(&self, file_len: u64) -> Metadata {
+        let time = time();
+        Metadata {
+            ft: FileType {
+                file: true,
+                ..Default::default()
+            },
+            accessed: time,
+            created: time,
+            modified: time,
+            len: file_len,
+        }        
     }
 }
 

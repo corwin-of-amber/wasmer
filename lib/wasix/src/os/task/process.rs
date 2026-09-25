@@ -618,6 +618,7 @@ impl WasiProcess {
     }
 
     /// Registers the shared memory used by this process.
+    #[allow(unused_variables)]
     pub fn register_memory(&self, memory: SharedMemory) {
         /* This CANNOT be done in Js backend; there, `SharedMemory` holds a `JsValue`, */
         /*   which can only be accessed by the thread (worker) that created it.        */

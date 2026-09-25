@@ -154,6 +154,12 @@ impl OffloadedFile {
         }
     }
 
+    pub fn with_span(mut self, offset: u64, size: u64) -> Self {
+        self.extents.push(FileExtent::MmapOffload { offset, size });
+        self.size += size;
+        self
+    }
+
     pub fn seek(&self, position: io::SeekFrom, cursor: &mut u64) -> io::Result<u64> {
         let to_err = |_| io::ErrorKind::InvalidInput;
 
