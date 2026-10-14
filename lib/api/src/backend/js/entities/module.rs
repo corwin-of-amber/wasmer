@@ -180,11 +180,13 @@ impl Module {
                     let val = js_sys::Reflect::get(&imports_object, &import_type.module().into())?;
                     if !val.is_undefined() {
                         // If the namespace is already set
-                        js_sys::Reflect::set(
-                            &val,
-                            &import_type.name().into(),
-                            &import.as_jsvalue(&store.as_store_ref()),
-                        )?;
+                        if !js_sys::Reflect::has(&val, &import_type.name().into())? {
+                            js_sys::Reflect::set(
+                                &val,
+                                &import_type.name().into(),
+                                &import.as_jsvalue(&store.as_store_ref()),
+                            )?;
+                        }
                     } else {
                         // If the namespace doesn't exist
                         let import_namespace = js_sys::Object::new();
