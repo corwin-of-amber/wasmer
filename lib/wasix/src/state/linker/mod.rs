@@ -416,7 +416,11 @@ impl Linker {
             recv_pending_operation: operation_rx,
         };
 
-        let main_module_clone = if engine.is_js() { None } else { Some(main_module.clone()) };
+        #[cfg(feature = "js")]
+        let is_js = engine.is_js();
+        #[cfg(not(feature = "js"))]
+        let is_js = false;
+        let main_module_clone = if is_js { None } else { Some(main_module.clone()) };
 
         let mut linker_state = LinkerState {
             engine,

@@ -34,13 +34,10 @@ impl loupe::MemoryUsage for ModuleHash {
 }
 
 impl ModuleHash {
-    /// WASM files may be huge. Limit the hash computation to first m bytes.
-    const MAX_PREFIX: usize = 1 << 16;
-
     /// Generate a new [`ModuleHash`] based on the Sha256 hash of some bytes.
     pub fn new(wasm: impl AsRef<[u8]>) -> Self {
         let wasm = wasm.as_ref();
-        let hash = sha2::Sha256::digest(&wasm[..wasm.len().min(Self::MAX_PREFIX)]).into();
+        let hash = sha2::Sha256::digest(wasm).into();
         Self(hash)
     }
 
@@ -96,24 +93,22 @@ mod tests {
     }
 
     #[test]
-    fn hash_prefix_boundaries() {
-        for size in [
-            ModuleHash::MAX_PREFIX - 1,
-            ModuleHash::MAX_PREFIX,
-            ModuleHash::MAX_PREFIX + 1,
-        ] {
+    fn hash_entire_input_around_64_kib() {
+        for size in [(1 << 16) - 1, (1 << 16), (1 << 16) + 1] {
             let wasm = vec![0x42; size];
-            let prefix = &wasm[..size.min(ModuleHash::MAX_PREFIX)];
-            let expected = sha2::Sha256::digest(prefix).into();
+            let expected = sha2::Sha256::digest(&wasm).into();
             assert_eq!(ModuleHash::new(&wasm), ModuleHash::from_bytes(expected));
         }
     }
 
     #[test]
-    fn ignore_bytes_after_prefix() {
-        let prefix = vec![0x42; ModuleHash::MAX_PREFIX];
+    fn hash_includes_bytes_after_64_kib() {
+        let prefix = vec![0x42; 1 << 16];
         let mut longer = prefix.clone();
         longer.push(0x99);
-        assert_eq!(ModuleHash::new(&prefix), ModuleHash::new(&longer));
+        assert_ne!(ModuleHash::new(&prefix), ModuleHash::new(&longer));
+        let mut changed = longer.clone();
+        *changed.last_mut().unwrap() ^= 1;
+        assert_ne!(ModuleHash::new(&longer), ModuleHash::new(&changed));
     }
 }
