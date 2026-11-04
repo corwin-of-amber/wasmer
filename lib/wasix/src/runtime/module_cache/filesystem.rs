@@ -10,6 +10,8 @@ use crate::runtime::task_manager::tokio::TokioTaskManager;
 
 /// A cache that saves modules to a folder on the host filesystem using
 /// [`Module::serialize()`].
+///
+/// Full-content hashes use a separate namespace from legacy prefix-keyed entries.
 #[derive(Debug, Clone)]
 pub struct FileSystemCache {
     cache_dir: PathBuf,
@@ -31,6 +33,7 @@ impl FileSystemCache {
     fn path(&self, key: ModuleHash, deterministic_id: &str) -> PathBuf {
         let artifact_version = wasmer_types::MetadataHeader::CURRENT_VERSION;
         self.cache_dir
+            .join("sha256-full")
             .join(format!("{deterministic_id}-v{artifact_version}"))
             .join(key.to_string())
             .with_extension("bin")
@@ -265,6 +268,28 @@ mod tests {
         cache.save(key, &engine, &module).await.unwrap();
 
         assert!(cache_dir.is_dir());
+    }
+
+    #[tokio::test]
+    async fn ignore_legacy_prefix_hash_entries() {
+        let temp = TempDir::new().unwrap();
+        let engine = Engine::default();
+        let key = ModuleHash::from_bytes([0; 32]);
+        let version = wasmer_types::MetadataHeader::CURRENT_VERSION;
+        let legacy = temp
+            .path()
+            .join(format!("{}-v{version}", engine.deterministic_id()))
+            .join(key.to_string())
+            .with_extension("bin");
+        std::fs::create_dir_all(legacy.parent().unwrap()).unwrap();
+        std::fs::write(&legacy, b"legacy prefix-keyed artifact").unwrap();
+        let cache = FileSystemCache::new(temp.path(), create_tokio_task_manager());
+        assert!(!cache.contains(key, &engine).await.unwrap());
+        assert!(matches!(
+            cache.load(key, &engine).await,
+            Err(CacheError::NotFound)
+        ));
+        assert!(legacy.exists());
     }
 
     #[tokio::test]
